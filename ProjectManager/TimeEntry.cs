@@ -16,14 +16,14 @@ public class TimeEntry
         this.Time += toAdd;
     }
 
-	public TimeEntry(Task task, TimeSpan time, string desc, DateOnly? date)
-	{
-    	if (!task.IsActive) {
-			throw new InvalidOperationException("Попытка создать проводку по неактивному заданию");
-    	}
-		this.Task = task;
-		this.Date = date ??  DateOnly.FromDateTime(DateTime.Now);
-		this.Description = desc;
-		this.Time = time;
-	}
+    public TimeEntry(Task task, TimeSpan time, string desc, DateOnly? date)
+    {
+        if (!task.IsActive) {
+            throw new InvalidOperationException("Попытка создать проводку по неактивному заданию");
+        }
+        this.Task = task;
+        this.Date = date ??  DateOnly.FromDateTime(DateTime.Now);
+        this.Description = desc;
+        this.Time = time;
+    }
 }

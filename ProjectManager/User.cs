@@ -7,7 +7,7 @@ public class User
 
     public User(int id, string name)
     {
-		this.Id = id;
-		this.Name = name;
+        this.Id = id;
+        this.Name = name;
     }
 }
