@@ -1,5 +1,7 @@
 namespace ProjectManager;
 
+using UserRepository = IRepository<User, int>;
+
 public class User
 {
     public int Id { get; set; }
@@ -11,3 +13,4 @@ public class User
         this.Name = name;
     }
 }
+

@@ -1,5 +1,7 @@
 namespace ProjectManager;
 
+using TaskRepository = IRepository<Task, int>;
+
 public class Task
 {
     public string Name { get; set; }

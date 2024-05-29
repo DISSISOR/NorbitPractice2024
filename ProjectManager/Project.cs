@@ -1,5 +1,7 @@
 namespace ProjectManager;
 
+using ProjectRepository = IRepository<Project, int>;
+
 public class Project
 {
     public string Name { get; set; }
