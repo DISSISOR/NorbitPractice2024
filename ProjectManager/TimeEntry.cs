@@ -1,4 +1,5 @@
 namespace ProjectManager;
+using System.ComponentModel.DataAnnotations;
 
 public class TimeEntry
 {
@@ -7,8 +8,10 @@ public class TimeEntry
     public DateOnly? Date { get; set; }
     public TimeSpan? Time { get; set; }
     public string? Description { get; set; }
-    public Task? Task { get; set; }
-    public User? User { get; set; }
+    [Required]
+    public Task Task { get; set; }
+    [Required]
+    public User User { get; set; }
 
     // public TimeEntry(Task task, User user, TimeSpan time, string desc, DateOnly? date)
     // {
