@@ -1,13 +1,12 @@
 namespace ProjectManager;
-
-using ProjectRepository = IRepository<Project, int>;
+using System.ComponentModel.DataAnnotations;
 
 public class Project
 {
-    public string Name { get; set; }
+    [Key]
     public string Code { get; set; }
+    public string Name { get; set; }
     public bool IsActive { get; set; }
-
 
     public Project(string name, string code, bool isActive = true)
     {

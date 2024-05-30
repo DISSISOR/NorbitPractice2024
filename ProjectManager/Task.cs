@@ -1,17 +1,9 @@
 namespace ProjectManager;
 
-using TaskRepository = IRepository<Task, int>;
-
 public class Task
 {
-    public string Name { get; set; }
-    public Project Project { get; set; }
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public Project? Project { get; set; }
     public bool IsActive { get; set; }
-
-    public Task(Project proj, string name, bool isActive = true)
-    {
-        this.Name = name;
-        this.Project = proj;
-        this.IsActive = isActive;
-    }
 }
