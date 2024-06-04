@@ -5,7 +5,7 @@ public class TimeEntry
 {
     public int Id { get; set; }
 
-    public DateOnly? Date { get; set; }
+    public DateOnly Date { get; set; }
     public TimeSpan? Time { get; set; }
     public string? Description { get; set; }
     [Required]

@@ -5,6 +5,7 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 using ProjectManager;
@@ -21,7 +22,19 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.MapType<DateOnly>(() => new OpenApiSchema
+    {
+        Type = "string",
+        Format = "date"
+    });
+    options.MapType<TimeSpan>(() => new OpenApiSchema
+    {
+        Type = "string",
+        Format = "time"
+    });
+});
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -55,10 +68,14 @@ app.UseAuthorization();
 
 var projectsApi = app.MapGroup("/projects").WithOpenApi()
     .WithTags("Projects");
+var tasksApi = app.MapGroup("/tasks").WithOpenApi()
+    .WithTags("Tasks");
 var usersApi = app.MapGroup("/users").WithOpenApi()
     .WithTags("Users");
 var loginApi = app.MapGroup("/login").WithOpenApi()
     .WithTags("Auth");
+var entriesApi = app.MapGroup("/entries").WithOpenApi()
+    .WithTags("Entries");
 
 loginApi.MapPost("/{username}", (string username) =>
 {
@@ -133,6 +150,56 @@ usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
             ? Results.Ok(user)
             : Results.NotFound())
     .WithName("GetUserByiD")
+    .WithOpenApi();
+
+tasksApi.MapGet("/", async(ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
+    .WithName("GetTasks")
+    .WithOpenApi();
+
+tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
+    await ctx.Tasks.FindAsync(id)
+        is ProjectManager.Task task
+            ? Results.Ok(task)
+            : Results.NotFound())
+    .WithName("GetTaskByiD")
+    .WithOpenApi();
+
+entriesApi.MapGet("/", async(int? days, ApplicationContext ctx) =>
+{
+    if (days is int d)
+    {
+        var since = DateOnly.FromDateTime(DateTime.Now - new TimeSpan(d, 0, 0, 0));
+        return await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+    } else
+    {
+        return await ctx.TimeEntries.ToListAsync();
+    }
+})
+    .WithName("GetEntries")
+    .WithOpenApi();
+
+
+entriesApi.MapGet("/{id:int}", async(int id, ApplicationContext ctx) =>
+{
+    var entry = await ctx.TimeEntries.FindAsync(id);
+    if (entry == null) return Results.NotFound();
+    return Results.Ok(entry);
+})
+    .WithName("GetEntryById")
+    .WithOpenApi();
+
+entriesApi.MapGet("/by_day_of_week/{day}", async(DayOfWeek day, int userId,  ApplicationContext ctx) =>
+{
+    var user = await ctx.Users.FindAsync(userId);
+    if (user is User u)
+    {
+        return await ctx.TimeEntries.Where(e => e.User == u && e.Date.DayOfWeek == day).ToListAsync();
+    } else
+    {
+        return await ctx.TimeEntries.Where(e => e.Date.DayOfWeek == day).ToListAsync();
+    }
+})
+    .WithName("GetEntriesByDayOfWeek")
     .WithOpenApi();
 
 app.Run();
