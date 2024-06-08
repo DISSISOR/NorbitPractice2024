@@ -188,18 +188,44 @@ entriesApi.MapGet("/{id:int}", async(int id, ApplicationContext ctx) =>
     .WithName("GetEntryById")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day_of_week/{day}", async(DayOfWeek day, int userId,  ApplicationContext ctx) =>
+entriesApi.MapGet("/by_day_of_week/{day}", async(DayOfWeek day, int? userId,  ApplicationContext ctx) =>
 {
-    var user = await ctx.Users.FindAsync(userId);
-    if (user is User u)
+    if (userId != null)
     {
-        return await ctx.TimeEntries.Where(e => e.User == u && e.Date.DayOfWeek == day).ToListAsync();
+        var user = await ctx.Users.FindAsync(userId);
+        if (user is User u)
+        {
+            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date.DayOfWeek == day).ToListAsync());
+        } else
+        {
+            return Results.NotFound();
+        }
     } else
     {
-        return await ctx.TimeEntries.Where(e => e.Date.DayOfWeek == day).ToListAsync();
+        return Results.Ok(await ctx.TimeEntries.Where(e => e.Date.DayOfWeek == day).ToListAsync());
     }
 })
     .WithName("GetEntriesByDayOfWeek")
+    .WithOpenApi();
+
+entriesApi.MapGet("/by_day", async(DateOnly date, int? userId, ApplicationContext ctx) =>
+{
+    if (userId != null)
+    {
+        var user = await ctx.Users.FindAsync(userId);
+        if (user is User u)
+        {
+            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date == date).ToListAsync());
+        } else
+        {
+            return Results.NotFound();
+        }
+    } else
+    {
+            return Results.Ok(await ctx.TimeEntries.Where(e => e.Date == date).ToListAsync());
+    }
+})
+    .WithName("GetEntriesByDay")
     .WithOpenApi();
 
 app.Run();
