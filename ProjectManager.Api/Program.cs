@@ -152,8 +152,27 @@ usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     .WithName("GetUserByiD")
     .WithOpenApi();
 
-tasksApi.MapGet("/", async(ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
+tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
     .WithName("GetTasks")
+    .WithOpenApi();
+
+tasksApi.MapPost("/", async (string name, int projectId, bool? isActive, ApplicationContext ctx) =>
+{
+    var project = await ctx.Projects.FindAsync(projectId);
+    if (project == null) return Results.NotFound("Project not found");
+
+    var nextId = ctx.Tasks.Select(t => t.Id).Max() + 1;
+    var task = new ProjectManager.Task {
+        Id = nextId,
+        Name = name,
+        Project = project,
+        IsActive = isActive ?? true,
+    };
+    ctx.Tasks.Add(task);
+    await ctx.SaveChangesAsync();
+    return Results.Created($"/tasks/{task.Id}", task);
+})
+    .WithName("CreateTask")
     .WithOpenApi();
 
 tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
@@ -164,7 +183,7 @@ tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     .WithName("GetTaskByiD")
     .WithOpenApi();
 
-entriesApi.MapGet("/", async(int? days, ApplicationContext ctx) =>
+entriesApi.MapGet("/", async (int? days, ApplicationContext ctx) =>
 {
     if (days is int d)
     {
@@ -178,8 +197,31 @@ entriesApi.MapGet("/", async(int? days, ApplicationContext ctx) =>
     .WithName("GetEntries")
     .WithOpenApi();
 
+entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
+{
+    var task = await ctx.Tasks.FindAsync(taskId);
+    if (task == null) return Results.NotFound("Task not found");
+    var user = await ctx.Users.FindAsync(userId);
+    if (user == null) return Results.NotFound("User not found");
 
-entriesApi.MapGet("/{id:int}", async(int id, ApplicationContext ctx) =>
+    var nextId = ctx.TimeEntries.Select(e => e.Id).Max() + 1;
+    var entry = new TimeEntry
+    {
+        Id = nextId,
+        Date = date ?? DateOnly.FromDateTime(DateTime.Now),
+        Time = time,
+        Description = description,
+        Task = task,
+        User = user,
+    };
+    ctx.TimeEntries.Add(entry);
+    await ctx.SaveChangesAsync();
+    return Results.Created($"/entries/{entry.Id}", entry);
+})
+    .WithName("CreateEntry")
+    .WithOpenApi();
+
+entriesApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
 {
     var entry = await ctx.TimeEntries.FindAsync(id);
     if (entry == null) return Results.NotFound();
@@ -188,7 +230,7 @@ entriesApi.MapGet("/{id:int}", async(int id, ApplicationContext ctx) =>
     .WithName("GetEntryById")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day_of_week/{day}", async(DayOfWeek day, int? userId,  ApplicationContext ctx) =>
+entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  ApplicationContext ctx) =>
 {
     if (userId != null)
     {
@@ -208,7 +250,7 @@ entriesApi.MapGet("/by_day_of_week/{day}", async(DayOfWeek day, int? userId,  Ap
     .WithName("GetEntriesByDayOfWeek")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day", async(DateOnly date, int? userId, ApplicationContext ctx) =>
+entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, ApplicationContext ctx) =>
 {
     if (userId != null)
     {
