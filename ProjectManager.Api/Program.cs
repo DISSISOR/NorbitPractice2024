@@ -120,6 +120,32 @@ projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ApplicationConte
     .WithName("GetProjectByCode")
     .WithOpenApi();
 
+projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
+{
+    var proj = await ctx.Projects.FindAsync();
+    if (proj == null) return Results.NotFound();
+
+    ctx.Projects.Remove(proj);
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("DeleteProject")
+    .WithOpenApi();
+
+projectsApi.MapPut("/{code:regex([0-9]+)}", async (string code, string? name, bool? isActive, ApplicationContext ctx) =>
+{
+    var proj = await ctx.Projects.FindAsync(code);
+    if (proj == null) return Results.NotFound();
+
+    if (name != null) proj.Name = (string)name;
+    if (isActive != null) proj.IsActive = (bool)isActive;
+
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("UpdateProject")
+    .WithOpenApi();
+
 projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, ApplicationContext ctx) =>
 {
     var proj = await ctx.Projects.FindAsync(code);
@@ -154,6 +180,18 @@ usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     .WithName("GetUserByiD")
     .WithOpenApi();
 
+usersApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+{
+    var user = await ctx.Users.FindAsync(id);
+    if (user == null) return Results.NotFound();
+
+    ctx.Users.Remove(user);
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("DeleteUser")
+    .WithOpenApi();
+
 tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
     .WithName("GetTasks")
     .WithOpenApi();
@@ -185,6 +223,32 @@ tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     .WithName("GetTaskByiD")
     .WithOpenApi();
 
+tasksApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+{
+    var task = await ctx.Tasks.FindAsync(id);
+    if (task == null) return Results.NotFound();
+
+    ctx.Tasks.Remove(task);
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("DeleteTask")
+    .WithOpenApi();
+
+tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  ApplicationContext ctx) =>
+{
+    var task = await ctx.Tasks.FindAsync(id);
+    if (task == null) return Results.NotFound();
+
+    if (name != null) task.Name = (string)name;
+    if (isActive != null) task.IsActive = (bool)isActive!;
+
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("UpdateTask")
+    .WithOpenApi();
+
 entriesApi.MapGet("/", async (int? days, ApplicationContext ctx) =>
 {
     if (days is int d)
@@ -201,6 +265,8 @@ entriesApi.MapGet("/", async (int? days, ApplicationContext ctx) =>
 
 entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
 {
+    // TODO: проверка, что от пользователя поступило менее 24-х
+    // часов проводок за день
     var task = await ctx.Tasks.FindAsync(taskId);
     if (task == null) return Results.NotFound("Task not found");
     var user = await ctx.Users.FindAsync(userId);
@@ -230,6 +296,18 @@ entriesApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     return Results.Ok(entry);
 })
     .WithName("GetEntryById")
+    .WithOpenApi();
+
+entriesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+{
+    var entry = await ctx.TimeEntries.FindAsync(id);
+    if (entry == null) return Results.NotFound();
+
+    ctx.TimeEntries.Remove(entry);
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("DelteEntry")
     .WithOpenApi();
 
 entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  ApplicationContext ctx) =>
