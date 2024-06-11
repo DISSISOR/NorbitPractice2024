@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
-using ProjectManager;
+using ProjectManager.Models;
+using ProjectManager.Infrastructure;
 
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -202,7 +203,7 @@ tasksApi.MapPost("/", async (string name, int projectId, bool? isActive, Applica
     if (project == null) return Results.NotFound("Project not found");
 
     var nextId = ctx.Tasks.Select(t => t.Id).Max() + 1;
-    var task = new ProjectManager.Task {
+    var task = new ProjectManager.Models.Task {
         Id = nextId,
         Name = name,
         Project = project,
@@ -217,7 +218,7 @@ tasksApi.MapPost("/", async (string name, int projectId, bool? isActive, Applica
 
 tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     await ctx.Tasks.FindAsync(id)
-        is ProjectManager.Task task
+        is ProjectManager.Models.Task task
             ? Results.Ok(task)
             : Results.NotFound())
     .WithName("GetTaskByiD")

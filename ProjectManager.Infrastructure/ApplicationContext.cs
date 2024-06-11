@@ -1,5 +1,8 @@
-namespace ProjectManager;
+namespace ProjectManager.Infrastructure;
+
 using Microsoft.EntityFrameworkCore;
+
+using ProjectManager.Models;
 
 public class ApplicationContext: DbContext
 {

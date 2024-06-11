@@ -1,4 +1,4 @@
-namespace ProjectManager;
+namespace ProjectManager.Models;
 
 public class User
 {

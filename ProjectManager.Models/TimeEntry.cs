@@ -1,4 +1,4 @@
-namespace ProjectManager;
+namespace ProjectManager.Models;
 using System.ComponentModel.DataAnnotations;
 
 public class TimeEntry
