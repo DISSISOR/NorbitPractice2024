@@ -103,9 +103,14 @@ projectsApi.MapPost("/", async (string name, bool? isActive, ApplicationContext 
     // TODO: работает только с 32-битными числами. Обобщить для
     // кодов произвольного размера.
 
-    var nextKey = (ctx.Projects.AsEnumerable().Select(
-  		 p => Int32.Parse(p.Code)).Max() + 1).ToString();
-    var project = new Project(name, nextKey, isActive ?? true);
+    var nextKey = ctx.Projects.Any()
+        ? (ctx.Projects.AsEnumerable()
+           .Select(
+            p => Int32.Parse(p.Code))
+            .Max() + 1)
+        : 1;
+	var nextCode = nextKey.ToString();
+    var project = new Project(name, nextCode, isActive ?? true);
     ctx.Projects.Add(project);
     await ctx.SaveChangesAsync();
     return Results.Created($"/projects/{project.Code}", project);
@@ -123,7 +128,7 @@ projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ApplicationConte
 
 projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
 {
-    var proj = await ctx.Projects.FindAsync();
+    var proj = await ctx.Projects.FindAsync(code);
     if (proj == null) return Results.NotFound();
 
     ctx.Projects.Remove(proj);
@@ -152,7 +157,7 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
     var proj = await ctx.Projects.FindAsync(code);
     if (proj == null) return Results.NotFound();
     return Results.Ok(
-        ctx.Tasks.Where(t => t.Project == proj).ToListAsync()
+        await ctx.Tasks.Where(t => t.Project == proj).ToListAsync()
     );
 })
     .WithName("GetProjectTasks")
@@ -164,7 +169,9 @@ usersApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Users.ToListAsy
 
 usersApi.MapPost("/", async (string name, ApplicationContext ctx) =>
 {
-    var nextId = ctx.Users.Select(u => u.Id).Max() + 1;
+    var nextId = ctx.Users.Any()
+        ? ctx.Users.Select(u => u.Id).Max() + 1
+        : 1;
     var user = new User(nextId, name);
     ctx.Users.Add(user);
     await ctx.SaveChangesAsync();
@@ -197,12 +204,14 @@ tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsy
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, int projectId, bool? isActive, ApplicationContext ctx) =>
+tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, ApplicationContext ctx) =>
 {
-    var project = await ctx.Projects.FindAsync(projectId);
+    var project = await ctx.Projects.FindAsync(projectCode);
     if (project == null) return Results.NotFound("Project not found");
 
-    var nextId = ctx.Tasks.Select(t => t.Id).Max() + 1;
+    var nextId = ctx.Tasks.Any()
+        ? ctx.Tasks.Select(t => t.Id).Max() + 1
+        : 1;
     var task = new ProjectManager.Models.Task {
         Id = nextId,
         Name = name,
@@ -250,15 +259,48 @@ tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  Appli
     .WithName("UpdateTask")
     .WithOpenApi();
 
-entriesApi.MapGet("/", async (int? days, ApplicationContext ctx) =>
+tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
 {
+    var task = await ctx.Tasks.FindAsync(id);
+    if (task == null) return Results.NotFound();
+    return Results.Ok(
+        await ctx.TimeEntries.Where(e => e.Task == task).ToListAsync()
+    );
+})
+    .WithName("GetTaskEntries")
+    .WithOpenApi();
+
+entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
+{
+    User? user = null;
+    if (userId is int id)
+    {
+        user = await ctx.Users.FindAsync(id);
+        if (user == null) return Results.NotFound();
+    }
     if (days is int d)
     {
         var since = DateOnly.FromDateTime(DateTime.Now - new TimeSpan(d, 0, 0, 0));
-        return await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+        if (user is User u)
+        {
+            var res = await ctx.TimeEntries.Where(e => e.Date >= since && e.User == u).ToListAsync();
+            return Results.Ok(res);
+        } else
+        {
+            var res = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+            return Results.Ok(res);
+        }
     } else
     {
-        return await ctx.TimeEntries.ToListAsync();
+        if (user is User u)
+        {
+            var res = await ctx.TimeEntries.Where(e => e.User == u).ToListAsync();
+            return Results.Ok(res);
+        } else
+        {
+            var res = await ctx.TimeEntries.ToListAsync();
+            return Results.Ok(res);
+        }
     }
 })
     .WithName("GetEntries")
@@ -273,7 +315,9 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description
     var user = await ctx.Users.FindAsync(userId);
     if (user == null) return Results.NotFound("User not found");
 
-    var nextId = ctx.TimeEntries.Select(e => e.Id).Max() + 1;
+    var nextId = ctx.TimeEntries.Any()
+        ? ctx.TimeEntries.Select(e => e.Id).Max() + 1
+        : 1;
     var entry = new TimeEntry
     {
         Id = nextId,
