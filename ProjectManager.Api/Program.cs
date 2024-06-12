@@ -24,6 +24,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ProjectService>();
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -135,25 +136,15 @@ usersApi.MapDelete("/{id:int}", async (int id, UserService userService) =>
     .WithName("DeleteUser")
     .WithOpenApi();
 
-projectsApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Projects.ToListAsync())
+projectsApi.MapGet("/", async (ProjectService projectService) => await projectService.GetAllAsync())
     .WithName("GetProjects")
     .WithOpenApi();
 
-projectsApi.MapPost("/", async (string name, bool? isActive, ApplicationContext ctx) =>
+projectsApi.MapPost("/", async (string name, bool? isActive, ProjectService projectService) =>
 {
-    // TODO: работает только с 32-битными числами. Обобщить для
-    // кодов произвольного размера.
-
-    var nextKey = ctx.Projects.Any()
-        ? (ctx.Projects.AsEnumerable()
-           .Select(
-            p => Int32.Parse(p.Code))
-            .Max() + 1)
-        : 1;
-	var nextCode = nextKey.ToString();
+	var nextCode = projectService.GetNextCode();
     var project = new Project(name, nextCode, isActive ?? true);
-    ctx.Projects.Add(project);
-    await ctx.SaveChangesAsync();
+    await projectService.AddAsync(project);
     return Results.Created($"/projects/{project.Code}", project);
 })
     .WithName("AddProject")
