@@ -1,3 +1,5 @@
+using ProjectManager.Api;
+
 using System.Text;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
@@ -20,6 +22,9 @@ var connectionString = configuration.GetConnectionString("DefaultConnection");
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddScoped<UserService>();
+
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddCors();
@@ -37,7 +42,6 @@ builder.Services.AddSwaggerGen(options =>
         Format = "time"
     });
 });
-builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
 	{
@@ -54,6 +58,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 	}
 );
 builder.Services.AddAuthorization();
+
 
 var app = builder.Build();
 
@@ -92,6 +97,42 @@ loginApi.MapPost("/{username}", (string username) =>
     return new JwtSecurityTokenHandler().WriteToken(jwt);
 })
     .WithName("Login")
+    .WithOpenApi();
+
+usersApi.MapGet("/", async (UserService userService) => await userService.GetAllAsync())
+    .WithName("GetUsers")
+    .WithOpenApi();
+
+usersApi.MapPost("/", async (string name, UserService userService) =>
+{
+    var nextId = userService.GetNextId();
+    var user = new User(nextId, name);
+    await userService.AddAsync(user);
+    return Results.Created($"/users/{user.Id}", user);
+})
+    .WithName("AddUser")
+    .WithOpenApi();
+
+usersApi.MapGet("/{id:int}", async (int id, UserService userService) =>
+    await userService.GetByIdAsync(id)
+        is User user
+            ? Results.Ok(user)
+            : Results.NotFound())
+    .WithName("GetUserByiD")
+    .WithOpenApi();
+
+usersApi.MapDelete("/{id:int}", async (int id, UserService userService) =>
+{
+    try
+    {
+        await userService.DeleteByIdAsync(id);
+        return Results.NoContent();
+    } catch(ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+})
+    .WithName("DeleteUser")
     .WithOpenApi();
 
 projectsApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Projects.ToListAsync())
@@ -163,42 +204,6 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
     .WithName("GetProjectTasks")
     .WithOpenApi();
 
-usersApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Users.ToListAsync())
-    .WithName("GetUsers")
-    .WithOpenApi();
-
-usersApi.MapPost("/", async (string name, ApplicationContext ctx) =>
-{
-    var nextId = ctx.Users.Any()
-        ? ctx.Users.Select(u => u.Id).Max() + 1
-        : 1;
-    var user = new User(nextId, name);
-    ctx.Users.Add(user);
-    await ctx.SaveChangesAsync();
-    return Results.Created($"/users/{user.Id}", user);
-})
-    .WithName("AddUser")
-    .WithOpenApi();
-
-usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
-    await ctx.Users.FindAsync(id)
-        is User user
-            ? Results.Ok(user)
-            : Results.NotFound())
-    .WithName("GetUserByiD")
-    .WithOpenApi();
-
-usersApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
-{
-    var user = await ctx.Users.FindAsync(id);
-    if (user == null) return Results.NotFound();
-
-    ctx.Users.Remove(user);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
-})
-    .WithName("DeleteUser")
-    .WithOpenApi();
 
 tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
     .WithName("GetTasks")
