@@ -43,7 +43,7 @@ public class ProjectService
     public async System.Threading.Tasks.Task DeleteByCodeAsync(string code)
     {
         var project = await GetByCodeAsync(code);
-        if (project == null) throw new ArgumentException("Не найден пользователь");
+        if (project == null) throw new ArgumentException("Не найден проект");
         _ctx.Set<Project>().Remove(project);
         await _ctx.SaveChangesAsync();
     }
@@ -60,6 +60,17 @@ public class ProjectService
                 .Max() + 1)
             : 1;
         return nextKey.ToString();
+    }
+
+    public async System.Threading.Tasks.Task Update(string code, string? name, bool? isActive)
+    {
+        var project = await _ctx.Projects.FindAsync(code);
+        if (project == null) throw new ArgumentException("Не найден проект");
+
+        if (name != null) project.Name = (string)name;
+        if (isActive != null) project.IsActive = (bool)isActive;
+
+        await _ctx.SaveChangesAsync();
     }
 }
 

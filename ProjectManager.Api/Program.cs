@@ -150,40 +150,46 @@ projectsApi.MapPost("/", async (string name, bool? isActive, ProjectService proj
     .WithName("AddProject")
     .WithOpenApi();
 
-projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
-    await ctx.Projects.FindAsync(code)
-        is Project proj
-            ? Results.Ok(proj)
-            : Results.NotFound())
+projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ProjectService projectService) =>
+{
+    var project = await projectService.GetByCodeAsync(code);
+    return project != null
+        ? Results.Ok(project)
+        : Results.NotFound();
+})
     .WithName("GetProjectByCode")
     .WithOpenApi();
 
-projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
+projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ProjectService projectService) =>
 {
-    var proj = await ctx.Projects.FindAsync(code);
-    if (proj == null) return Results.NotFound();
-
-    ctx.Projects.Remove(proj);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await projectService.DeleteByCodeAsync(code);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("DeleteProject")
     .WithOpenApi();
 
-projectsApi.MapPut("/{code:regex([0-9]+)}", async (string code, string? name, bool? isActive, ApplicationContext ctx) =>
+projectsApi.MapPut("/{code:regex([0-9]+)}", async (string code, string? name, bool? isActive, ProjectService projectService) =>
 {
-    var proj = await ctx.Projects.FindAsync(code);
-    if (proj == null) return Results.NotFound();
-
-    if (name != null) proj.Name = (string)name;
-    if (isActive != null) proj.IsActive = (bool)isActive;
-
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await projectService.Update(code, name, isActive);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("UpdateProject")
     .WithOpenApi();
 
+// FIXME: здесь стоит использовать TaskService и ProjectService вместо сырой БД.
+// Первого на момент написания комментария не существует
 projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, ApplicationContext ctx) =>
 {
     var proj = await ctx.Projects.FindAsync(code);
