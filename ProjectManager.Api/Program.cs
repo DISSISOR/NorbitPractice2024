@@ -25,6 +25,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<TaskService>();
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -202,65 +203,71 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
     .WithOpenApi();
 
 
-tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
+tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAllAsync())
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, ApplicationContext ctx) =>
+tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, TaskService taskService, ProjectService projectService) =>
 {
-    var project = await ctx.Projects.FindAsync(projectCode);
-    if (project == null) return Results.NotFound("Project not found");
+    Project project;
+    try
+    {
+        project = await projectService.GetByCodeAsync(projectCode);
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 
-    var nextId = ctx.Tasks.Any()
-        ? ctx.Tasks.Select(t => t.Id).Max() + 1
-        : 1;
+    var nextId = taskService.GetNextId();
     var task = new ProjectManager.Models.Task {
         Id = nextId,
         Name = name,
         Project = project,
         IsActive = isActive ?? true,
     };
-    ctx.Tasks.Add(task);
-    await ctx.SaveChangesAsync();
+    await taskService.AddAsync(task);
     return Results.Created($"/tasks/{task.Id}", task);
 })
     .WithName("CreateTask")
     .WithOpenApi();
 
-tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
-    await ctx.Tasks.FindAsync(id)
+tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
+    await taskService.GetByIdAsync(id)
         is ProjectManager.Models.Task task
             ? Results.Ok(task)
             : Results.NotFound())
     .WithName("GetTaskByiD")
     .WithOpenApi();
 
-tasksApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
 {
-    var task = await ctx.Tasks.FindAsync(id);
-    if (task == null) return Results.NotFound();
-
-    ctx.Tasks.Remove(task);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await taskService.DeleteByIdAsync(id);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("DeleteTask")
     .WithOpenApi();
 
-tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  ApplicationContext ctx) =>
+tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  TaskService taskService) =>
 {
-    var task = await ctx.Tasks.FindAsync(id);
-    if (task == null) return Results.NotFound();
-
-    if (name != null) task.Name = (string)name;
-    if (isActive != null) task.IsActive = (bool)isActive!;
-
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await taskService.Update(id, name, isActive);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("UpdateTask")
     .WithOpenApi();
 
+// FIXME: использовать другие сервисы
 tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
 {
     var task = await ctx.Tasks.FindAsync(id);
