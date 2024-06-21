@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 
 using ProjectManager.Models;
 using ProjectManager.Infrastructure;
@@ -42,6 +43,29 @@ builder.Services.AddSwaggerGen(options =>
     {
         Type = "string",
         Format = "time"
+    });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        In = ParameterLocation.Header,
+        Description = "Please enter a valid token",
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        BearerFormat = "JWT",
+        Scheme = "Bearer"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type=ReferenceType.SecurityScheme,
+                    Id="Bearer"
+                }
+            },
+            new string[]{}
+        }
     });
 });
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -94,14 +118,14 @@ loginApi.MapPost("/{username}", (string username) =>
             issuer: AuthOptions.ISSUER,
             audience: AuthOptions.AUDIENCE,
             claims: claims,
-            expires: DateTime.UtcNow.Add(TimeSpan.FromMinutes(2)),
+            expires: DateTime.UtcNow.Add(TimeSpan.FromMinutes(10)),
             signingCredentials: new SigningCredentials(AuthOptions.GetSymmetricSecurityKey(), SecurityAlgorithms.HmacSha256));
     return new JwtSecurityTokenHandler().WriteToken(jwt);
 })
     .WithName("Login")
     .WithOpenApi();
 
-usersApi.MapGet("/", async (UserService userService) => await userService.GetAllAsync())
+usersApi.MapGet("/", [Authorize] async (UserService userService) => await userService.GetAllAsync())
     .WithName("GetUsers")
     .WithOpenApi();
 
@@ -201,7 +225,6 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
 })
     .WithName("GetProjectTasks")
     .WithOpenApi();
-
 
 tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAllAsync())
     .WithName("GetTasks")
