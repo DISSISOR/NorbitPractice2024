@@ -1,3 +1,5 @@
+using ProjectManager.Api;
+
 using System.Text;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
@@ -20,6 +22,11 @@ var connectionString = configuration.GetConnectionString("DefaultConnection");
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<TaskService>();
+
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddCors();
@@ -37,7 +44,6 @@ builder.Services.AddSwaggerGen(options =>
         Format = "time"
     });
 });
-builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
 	{
@@ -54,6 +60,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 	}
 );
 builder.Services.AddAuthorization();
+
 
 var app = builder.Build();
 
@@ -94,64 +101,96 @@ loginApi.MapPost("/{username}", (string username) =>
     .WithName("Login")
     .WithOpenApi();
 
-projectsApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Projects.ToListAsync())
+usersApi.MapGet("/", async (UserService userService) => await userService.GetAllAsync())
+    .WithName("GetUsers")
+    .WithOpenApi();
+
+usersApi.MapPost("/", async (string name, UserService userService) =>
+{
+    var nextId = userService.GetNextId();
+    var user = new User(nextId, name);
+    await userService.AddAsync(user);
+    return Results.Created($"/users/{user.Id}", user);
+})
+    .WithName("AddUser")
+    .WithOpenApi();
+
+usersApi.MapGet("/{id:int}", async (int id, UserService userService) =>
+    await userService.GetByIdAsync(id)
+        is User user
+            ? Results.Ok(user)
+            : Results.NotFound())
+    .WithName("GetUserByiD")
+    .WithOpenApi();
+
+usersApi.MapDelete("/{id:int}", async (int id, UserService userService) =>
+{
+    try
+    {
+        await userService.DeleteByIdAsync(id);
+        return Results.NoContent();
+    } catch(ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+})
+    .WithName("DeleteUser")
+    .WithOpenApi();
+
+projectsApi.MapGet("/", async (ProjectService projectService) => await projectService.GetAllAsync())
     .WithName("GetProjects")
     .WithOpenApi();
 
-projectsApi.MapPost("/", async (string name, bool? isActive, ApplicationContext ctx) =>
+projectsApi.MapPost("/", async (string name, bool? isActive, ProjectService projectService) =>
 {
-    // TODO: работает только с 32-битными числами. Обобщить для
-    // кодов произвольного размера.
-
-    var nextKey = ctx.Projects.Any()
-        ? (ctx.Projects.AsEnumerable()
-           .Select(
-            p => Int32.Parse(p.Code))
-            .Max() + 1)
-        : 1;
-	var nextCode = nextKey.ToString();
+	var nextCode = projectService.GetNextCode();
     var project = new Project(name, nextCode, isActive ?? true);
-    ctx.Projects.Add(project);
-    await ctx.SaveChangesAsync();
+    await projectService.AddAsync(project);
     return Results.Created($"/projects/{project.Code}", project);
 })
     .WithName("AddProject")
     .WithOpenApi();
 
-projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
-    await ctx.Projects.FindAsync(code)
-        is Project proj
-            ? Results.Ok(proj)
-            : Results.NotFound())
+projectsApi.MapGet("/{code:regex([0-9]+)}", async (string code, ProjectService projectService) =>
+{
+    var project = await projectService.GetByCodeAsync(code);
+    return project != null
+        ? Results.Ok(project)
+        : Results.NotFound();
+})
     .WithName("GetProjectByCode")
     .WithOpenApi();
 
-projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ApplicationContext ctx) =>
+projectsApi.MapDelete("/{code:regex([0-9]+)}", async (string code, ProjectService projectService) =>
 {
-    var proj = await ctx.Projects.FindAsync(code);
-    if (proj == null) return Results.NotFound();
-
-    ctx.Projects.Remove(proj);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await projectService.DeleteByCodeAsync(code);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("DeleteProject")
     .WithOpenApi();
 
-projectsApi.MapPut("/{code:regex([0-9]+)}", async (string code, string? name, bool? isActive, ApplicationContext ctx) =>
+projectsApi.MapPut("/{code:regex([0-9]+)}", async (string code, string? name, bool? isActive, ProjectService projectService) =>
 {
-    var proj = await ctx.Projects.FindAsync(code);
-    if (proj == null) return Results.NotFound();
-
-    if (name != null) proj.Name = (string)name;
-    if (isActive != null) proj.IsActive = (bool)isActive;
-
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await projectService.Update(code, name, isActive);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("UpdateProject")
     .WithOpenApi();
 
+// FIXME: здесь стоит использовать TaskService и ProjectService вместо сырой БД.
+// Первого на момент написания комментария не существует
 projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, ApplicationContext ctx) =>
 {
     var proj = await ctx.Projects.FindAsync(code);
@@ -163,102 +202,72 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
     .WithName("GetProjectTasks")
     .WithOpenApi();
 
-usersApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Users.ToListAsync())
-    .WithName("GetUsers")
-    .WithOpenApi();
 
-usersApi.MapPost("/", async (string name, ApplicationContext ctx) =>
-{
-    var nextId = ctx.Users.Any()
-        ? ctx.Users.Select(u => u.Id).Max() + 1
-        : 1;
-    var user = new User(nextId, name);
-    ctx.Users.Add(user);
-    await ctx.SaveChangesAsync();
-    return Results.Created($"/users/{user.Id}", user);
-})
-    .WithName("AddUser")
-    .WithOpenApi();
-
-usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
-    await ctx.Users.FindAsync(id)
-        is User user
-            ? Results.Ok(user)
-            : Results.NotFound())
-    .WithName("GetUserByiD")
-    .WithOpenApi();
-
-usersApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
-{
-    var user = await ctx.Users.FindAsync(id);
-    if (user == null) return Results.NotFound();
-
-    ctx.Users.Remove(user);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
-})
-    .WithName("DeleteUser")
-    .WithOpenApi();
-
-tasksApi.MapGet("/", async (ApplicationContext ctx) => await ctx.Tasks.ToListAsync())
+tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAllAsync())
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, ApplicationContext ctx) =>
+tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, TaskService taskService, ProjectService projectService) =>
 {
-    var project = await ctx.Projects.FindAsync(projectCode);
-    if (project == null) return Results.NotFound("Project not found");
+    Project project;
+    try
+    {
+        project = await projectService.GetByCodeAsync(projectCode);
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 
-    var nextId = ctx.Tasks.Any()
-        ? ctx.Tasks.Select(t => t.Id).Max() + 1
-        : 1;
+    var nextId = taskService.GetNextId();
     var task = new ProjectManager.Models.Task {
         Id = nextId,
         Name = name,
         Project = project,
         IsActive = isActive ?? true,
     };
-    ctx.Tasks.Add(task);
-    await ctx.SaveChangesAsync();
+    await taskService.AddAsync(task);
     return Results.Created($"/tasks/{task.Id}", task);
 })
     .WithName("CreateTask")
     .WithOpenApi();
 
-tasksApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
-    await ctx.Tasks.FindAsync(id)
+tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
+    await taskService.GetByIdAsync(id)
         is ProjectManager.Models.Task task
             ? Results.Ok(task)
             : Results.NotFound())
     .WithName("GetTaskByiD")
     .WithOpenApi();
 
-tasksApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
 {
-    var task = await ctx.Tasks.FindAsync(id);
-    if (task == null) return Results.NotFound();
-
-    ctx.Tasks.Remove(task);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await taskService.DeleteByIdAsync(id);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("DeleteTask")
     .WithOpenApi();
 
-tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  ApplicationContext ctx) =>
+tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  TaskService taskService) =>
 {
-    var task = await ctx.Tasks.FindAsync(id);
-    if (task == null) return Results.NotFound();
-
-    if (name != null) task.Name = (string)name;
-    if (isActive != null) task.IsActive = (bool)isActive!;
-
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await taskService.Update(id, name, isActive);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("UpdateTask")
     .WithOpenApi();
 
+// FIXME: использовать другие сервисы
 tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
 {
     var task = await ctx.Tasks.FindAsync(id);
