@@ -9,9 +9,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-
+using ProjectManager.Api.Properties;
 using ProjectManager.Models;
 using ProjectManager.Infrastructure;
+using Task = ProjectManager.Models.Task;
 
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -279,54 +280,30 @@ tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
     .WithName("GetTaskEntries")
     .WithOpenApi();
 
-entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
-{
-    User? user = null;
-    if (userId is int id)
-    {
-        user = await ctx.Users.FindAsync(id);
-        if (user == null) return Results.NotFound();
-    }
-    if (days is int d)
-    {
-        var since = DateOnly.FromDateTime(DateTime.Now - new TimeSpan(d, 0, 0, 0));
-        if (user is User u)
-        {
-            var res = await ctx.TimeEntries.Where(e => e.Date >= since && e.User == u).ToListAsync();
-            return Results.Ok(res);
-        } else
-        {
-            var res = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
-            return Results.Ok(res);
-        }
-    } else
-    {
-        if (user is User u)
-        {
-            var res = await ctx.TimeEntries.Where(e => e.User == u).ToListAsync();
-            return Results.Ok(res);
-        } else
-        {
-            var res = await ctx.TimeEntries.ToListAsync();
-            return Results.Ok(res);
-        }
-    }
-})
+entriesApi.MapGet("/", async (EnteriesService enteriesService) =>
+await enteriesService.GetAllAsync())
     .WithName("GetEntries")
     .WithOpenApi();
 
-entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
+entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, 
+        string description, Task task, User user, EnteriesService enteriesService) =>
 {
-    // TODO: проверка, что от пользователя поступило менее 24-х
-    // часов проводок за день
-    var task = await ctx.Tasks.FindAsync(taskId);
-    if (task == null) return Results.NotFound("Task not found");
-    var user = await ctx.Users.FindAsync(userId);
-    if (user == null) return Results.NotFound("User not found");
+    // проверка, что от пользователя поступило менее 24-х часов проводок за день
+    var allEntries = await enteriesService.GetAllAsync();
+    var entryDate = date ?? DateOnly.FromDateTime(DateTime.Now);
+    
+    // Подсчитываем общее количество времени для проводок с той же датой
+    var totalHoursForDate = allEntries
+        .Where(e => e.Date == entryDate && e.UserId == user.Id)
+        .Select(e => e.Time)
+        .Aggregate(TimeSpan.Zero, (sum, next) => 
+            sum.Add((TimeSpan)next!)).TotalHours;
+    if (totalHoursForDate + time.TotalHours > 24)
+    {
+        return Results.BadRequest("Превышено максимальное количество часов за день.");
+    }
 
-    var nextId = ctx.TimeEntries.Any()
-        ? ctx.TimeEntries.Select(e => e.Id).Max() + 1
-        : 1;
+    var nextId = enteriesService.GetNextId();
     var entry = new TimeEntry
     {
         Id = nextId,
@@ -334,75 +311,99 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description
         Time = time,
         Description = description,
         Task = task,
+        TaskId = task.Id,
         User = user,
+        UserId = user.Id
     };
-    ctx.TimeEntries.Add(entry);
-    await ctx.SaveChangesAsync();
+    
+    await enteriesService.AddAsync(entry);
     return Results.Created($"/entries/{entry.Id}", entry);
 })
     .WithName("CreateEntry")
     .WithOpenApi();
 
-entriesApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
-{
-    var entry = await ctx.TimeEntries.FindAsync(id);
-    if (entry == null) return Results.NotFound();
-    return Results.Ok(entry);
-})
+entriesApi.MapGet("/{id:int}", async (int id, EnteriesService enteriesService) =>
+(await enteriesService.GetByIdAsync(id))
+    is TimeEntry entry
+    ? Results.Ok() 
+    : Results.NotFound())
     .WithName("GetEntryById")
     .WithOpenApi();
 
-entriesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+entriesApi.MapDelete("/{id:int}", async (int id, EnteriesService entry) =>
 {
-    var entry = await ctx.TimeEntries.FindAsync(id);
-    if (entry == null) return Results.NotFound();
-
-    ctx.TimeEntries.Remove(entry);
-    await ctx.SaveChangesAsync();
-    return Results.NoContent();
+    try
+    {
+        await entry.DeleteByIdAsync(id);
+        return Results.NoContent();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
 })
     .WithName("DelteEntry")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  ApplicationContext ctx) =>
+entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  EnteriesService entry) =>
 {
+    var allEntries = await entry.GetAllAsync();
     if (userId != null)
     {
-        var user = await ctx.Users.FindAsync(userId);
-        if (user is User u)
+        try
         {
-            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date.DayOfWeek == day).ToListAsync());
-        } else
+            return Results.Ok(allEntries
+                .Where(e => e.UserId == userId 
+                            && e.Date.DayOfWeek == day));
+        }
+        catch (ArgumentException ex)
         {
             return Results.NotFound();
         }
-    } else
-    {
-        return Results.Ok(await ctx.TimeEntries.Where(e => e.Date.DayOfWeek == day).ToListAsync());
     }
+    return Results.Ok(allEntries
+        .Where(e => e.Date.DayOfWeek == day));
 })
     .WithName("GetEntriesByDayOfWeek")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, ApplicationContext ctx) =>
+entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, EnteriesService entry) =>
 {
+    var allEntries = await entry.GetAllAsync();
     if (userId != null)
     {
-        var user = await ctx.Users.FindAsync(userId);
-        if (user is User u)
+        try
         {
-            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date == date).ToListAsync());
-        } else
+            return Results.Ok(allEntries
+                .Where(e => e.UserId == userId 
+                            && e.Date == date));
+        }
+        catch (ArgumentException ex)
         {
             return Results.NotFound();
         }
-    } else
-    {
-            return Results.Ok(await ctx.TimeEntries.Where(e => e.Date == date).ToListAsync());
     }
+    return Results.Ok(allEntries
+        .Where(e => e.Date == date));
 })
     .WithName("GetEntriesByDay")
     .WithOpenApi();
+
+tasksApi.MapPut("/{id:int}", async (int id, int user_id, int task_id,
+        DateOnly date, TimeSpan? time, string? description,  EnteriesService entry) =>
+    {
+        try
+        {
+            await entry.Update(id, user_id, task_id, date, time, description);
+            return Results.NoContent();
+        } catch (ArgumentException ex)
+        {
+            return Results.NotFound(ex.Message);
+        }
+    })
+    .WithName("UpdateEntry")
+    .WithOpenApi();
+
 
 app.Run();
 
