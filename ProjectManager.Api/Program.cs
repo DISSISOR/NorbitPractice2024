@@ -232,7 +232,7 @@ tasksApi.MapPost("/", async (string name, string projectCode, int userId, bool? 
 
 tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
     await taskService.GetByIdAsync(id)
-        is ProjectManager.Models.Task task
+        is TaskDTO task
             ? Results.Ok(task)
             : Results.NotFound())
     .WithName("GetTaskById")
