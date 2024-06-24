@@ -4,11 +4,11 @@ using ProjectManager.Models;
 
 namespace ProjectManager.Api.Properties;
 
-public class EnteriesService
+public class EntriesService
 {
     private readonly ApplicationContext _ctx;
 
-    public EnteriesService(ApplicationContext dbContext)
+    public EntriesService(ApplicationContext dbContext)
     {
         _ctx = dbContext;
     }

@@ -9,10 +9,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using ProjectManager.Api.Properties;
 using ProjectManager.Models;
 using ProjectManager.Infrastructure;
-using Task = ProjectManager.Models.Task;
 
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -27,6 +27,7 @@ builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(c
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<EntriesService>();
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -269,24 +270,22 @@ tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  TaskS
     .WithOpenApi();
 
 // FIXME: использовать другие сервисы
-tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
+tasksApi.MapGet("/{id:int}/entries", async (int id, EntriesService entry) =>
 {
-    var task = await ctx.Tasks.FindAsync(id);
-    if (task == null) return Results.NotFound();
+    var allEntries = await entry.GetAllAsync();
     return Results.Ok(
-        await ctx.TimeEntries.Where(e => e.Task == task).ToListAsync()
-    );
+        allEntries.Where(e => e.TaskId == id));
 })
     .WithName("GetTaskEntries")
     .WithOpenApi();
 
-entriesApi.MapGet("/", async (EnteriesService enteriesService) =>
+entriesApi.MapGet("/", async (EntriesService enteriesService) =>
 await enteriesService.GetAllAsync())
     .WithName("GetEntries")
     .WithOpenApi();
 
-entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, 
-        string description, Task task, User user, EnteriesService enteriesService) =>
+/*entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, 
+        string description, ProjectManager.Models.Task task, User user, EnteriesService enteriesService) =>
 {
     // проверка, что от пользователя поступило менее 24-х часов проводок за день
     var allEntries = await enteriesService.GetAllAsync();
@@ -320,9 +319,9 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time,
     return Results.Created($"/entries/{entry.Id}", entry);
 })
     .WithName("CreateEntry")
-    .WithOpenApi();
+    .WithOpenApi();*/
 
-entriesApi.MapGet("/{id:int}", async (int id, EnteriesService enteriesService) =>
+entriesApi.MapGet("/{id:int}", async (int id, EntriesService enteriesService) =>
 (await enteriesService.GetByIdAsync(id))
     is TimeEntry entry
     ? Results.Ok() 
@@ -330,7 +329,7 @@ entriesApi.MapGet("/{id:int}", async (int id, EnteriesService enteriesService) =
     .WithName("GetEntryById")
     .WithOpenApi();
 
-entriesApi.MapDelete("/{id:int}", async (int id, EnteriesService entry) =>
+entriesApi.MapDelete("/{id:int}", async (int id, EntriesService entry) =>
 {
     try
     {
@@ -345,7 +344,7 @@ entriesApi.MapDelete("/{id:int}", async (int id, EnteriesService entry) =>
     .WithName("DelteEntry")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  EnteriesService entry) =>
+entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId, EntriesService entry) =>
 {
     var allEntries = await entry.GetAllAsync();
     if (userId != null)
@@ -367,7 +366,7 @@ entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  E
     .WithName("GetEntriesByDayOfWeek")
     .WithOpenApi();
 
-entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, EnteriesService entry) =>
+entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, EntriesService entry) =>
 {
     var allEntries = await entry.GetAllAsync();
     if (userId != null)
@@ -389,8 +388,8 @@ entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, EnteriesService 
     .WithName("GetEntriesByDay")
     .WithOpenApi();
 
-tasksApi.MapPut("/{id:int}", async (int id, int user_id, int task_id,
-        DateOnly date, TimeSpan? time, string? description,  EnteriesService entry) =>
+/*tasksApi.MapPut("/{id:int}", async (int id, int user_id, int task_id,
+        DateOnly date, TimeSpan? time, string? description, EnteriesService entry) =>
     {
         try
         {
@@ -402,7 +401,7 @@ tasksApi.MapPut("/{id:int}", async (int id, int user_id, int task_id,
         }
     })
     .WithName("UpdateEntry")
-    .WithOpenApi();
+    .WithOpenApi();*/
 
 
 app.Run();
