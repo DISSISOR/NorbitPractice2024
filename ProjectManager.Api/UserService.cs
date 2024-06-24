@@ -20,6 +20,11 @@ public class UserService
         return await _ctx.Set<User>().FindAsync(id);
     }
 
+    public async Task<User?> GetByNameAsync(string name)
+    {
+        return await _ctx.Set<User>().SingleOrDefaultAsync(u => u.Name == name);
+    }
+
     public async Task<List<User>> GetAllAsync()
     {
         return await _ctx.Set<User>().ToListAsync();
@@ -54,5 +59,13 @@ public class UserService
         return _ctx.Set<User>().Any()
             ? _ctx.Users.Select(u => u.Id).Max() + 1
             : 1;
+    }
+
+    public async Task<bool> VerifyAsync(string name, string password)
+    {
+        var user = await GetByNameAsync(name);
+        if (user == null) return false;
+        var hash = User.GenHash(name, password);
+        return user.Hash == hash;
     }
 }

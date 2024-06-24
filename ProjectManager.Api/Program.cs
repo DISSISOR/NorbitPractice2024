@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 
 using ProjectManager.Models;
 using ProjectManager.Infrastructure;
@@ -111,33 +112,59 @@ var loginApi = app.MapGroup("/login").WithOpenApi()
 var entriesApi = app.MapGroup("/entries").WithOpenApi()
     .WithTags("Entries");
 
-loginApi.MapPost("/{username}", (string username) =>
+// loginApi.MapPost("/register", (string username, string password) =>
+// {
+// })
+//     .WithName("Register")
+//     .WithOpenApi();
+
+loginApi.MapPost("/register", [Authorize(Roles="admin")] async (string name, string password, bool? isAdmin, UserService userService) =>
 {
-    var claims = new List<Claim> {new Claim(ClaimTypes.Name, username) };
+    var nextId = userService.GetNextId();
+    var role = Role.User;
+    if (isAdmin ?? false)
+    {
+        role = Role.Admin;
+    }
+    var user = User.WithPassword(nextId, name, password, role);
+    await userService.AddAsync(user);
+    return Results.Created($"/users/{user.Id}", user);
+})
+    .WithName("Register")
+    .WithOpenApi();
+
+loginApi.MapPost("/{username}", async (string username, string password, UserService userService) =>
+{
+    var isValid = await userService.VerifyAsync(username, password);
+    if (!isValid) return Results.Unauthorized();
+    var user = await userService.GetByNameAsync(username);
+    var claims = new List<Claim> {
+        new Claim(ClaimTypes.Name, username),
+        new Claim(ClaimsIdentity.DefaultRoleClaimType, user.RoleAsString()),
+        new Claim(ClaimTypes.Hash, user.Hash),
+    };
     var jwt = new JwtSecurityToken(
             issuer: AuthOptions.ISSUER,
             audience: AuthOptions.AUDIENCE,
             claims: claims,
             expires: DateTime.UtcNow.Add(TimeSpan.FromMinutes(10)),
             signingCredentials: new SigningCredentials(AuthOptions.GetSymmetricSecurityKey(), SecurityAlgorithms.HmacSha256));
-    return new JwtSecurityTokenHandler().WriteToken(jwt);
+    var response = new
+    {
+        access_token = new JwtSecurityTokenHandler().WriteToken(jwt),
+        id = user.Id,
+        name = user.Name,
+        role = user.RoleAsString(),
+    };
+    return Results.Json(response);
 })
     .WithName("Login")
     .WithOpenApi();
 
-usersApi.MapGet("/", [Authorize] async (UserService userService) => await userService.GetAllAsync())
+usersApi.MapGet("/", [Authorize(Roles="admin")] async (UserService userService) => await userService.GetAllAsync())
     .WithName("GetUsers")
     .WithOpenApi();
 
-usersApi.MapPost("/", async (string name, UserService userService) =>
-{
-    var nextId = userService.GetNextId();
-    var user = new User(nextId, name);
-    await userService.AddAsync(user);
-    return Results.Created($"/users/{user.Id}", user);
-})
-    .WithName("AddUser")
-    .WithOpenApi();
 
 usersApi.MapGet("/{id:int}", async (int id, UserService userService) =>
     await userService.GetByIdAsync(id)
