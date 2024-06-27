@@ -1,6 +1,8 @@
 namespace ProjectManager.Models;
 
-using  System.Text.Json.Serialization;
+using System.Text;
+using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 
 public class User
@@ -46,7 +48,14 @@ public class User
     public static string GenHash(string name, string password)
     {
         var toHash = name + '#' + password;
-        return toHash;
+        var algorithm = SHA256.Create();
+        var bytes = algorithm.ComputeHash(Encoding.UTF8.GetBytes(toHash));
+        var sb = new StringBuilder();
+        foreach (byte b in bytes)
+        {
+            sb.Append(b.ToString());
+        }
+        return sb.ToString();
     }
 }
 
