@@ -1,6 +1,7 @@
 using ProjectManager.Api;
 
 using System.Text;
+using System.Web;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 
@@ -8,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -100,6 +102,20 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(builder => builder.AllowAnyOrigin());
+
+app.Use(async (context, next) => {
+    var request = context.Request;
+    var path = request.Path;
+    if (path.StartsWithSegments("/login") && !path.StartsWithSegments("/login/register")) {
+        await next.Invoke();
+        return;
+    }
+    if (!context.User.Identity.IsAuthenticated) {
+        await context.ChallengeAsync();
+        return;
+    }
+    await next.Invoke();
+});
 
 var projectsApi = app.MapGroup("/projects").WithOpenApi()
     .WithTags("Projects");
@@ -498,4 +514,3 @@ public class AuthOptions
     public static SymmetricSecurityKey GetSymmetricSecurityKey() =>
         new SymmetricSecurityKey(Encoding.UTF8.GetBytes(KEY));
 }
-
