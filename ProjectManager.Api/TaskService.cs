@@ -25,6 +25,15 @@ public class TaskService
         return await _ctx.Set<Task>().ToListAsync();
     }
 
+    public async Task<List<Task>> GetAllByUserAsync(int userId)
+    {
+        if (_ctx.Set<User>().FindAsync(userId).Result == null)
+        {
+            throw new ArgumentException("Не найден пользователь");
+        }
+        return await _ctx.Set<Task>().Where(t => t.UserId == userId).ToListAsync();
+    }
+
     public async System.Threading.Tasks.Task AddAsync(Task task)
     {
         _ctx.Set<Task>().Add(task);

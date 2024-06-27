@@ -207,24 +207,23 @@ tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAll
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, string projectCode, bool? isActive, TaskService taskService, ProjectService projectService) =>
+tasksApi.MapPost("/", async (string name, string projectCode, int userId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService) =>
 {
-    Project project;
-    try
-    {
-        project = await projectService.GetByCodeAsync(projectCode);
-    } catch (ArgumentException ex)
-    {
-        return Results.NotFound(ex.Message);
-    }
+    var project = await projectService.GetByCodeAsync(projectCode);
+    if (project == null) return Results.NotFound("Проект не найден");
+    var user = await userService.GetByIdAsync(userId);
+    if (user == null) return Results.NotFound("Пользователь не найден");
 
     var nextId = taskService.GetNextId();
     var task = new ProjectManager.Models.Task {
         Id = nextId,
+        // UserId = userId,
+        User = user,
         Name = name,
         Project = project,
         IsActive = isActive ?? true,
     };
+    // var task = new ProjectManager.Models.Task(nextId, name, project, user, isActive ?? true);
     await taskService.AddAsync(task);
     return Results.Created($"/tasks/{task.Id}", task);
 })
@@ -236,7 +235,21 @@ tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
         is ProjectManager.Models.Task task
             ? Results.Ok(task)
             : Results.NotFound())
-    .WithName("GetTaskByiD")
+    .WithName("GetTaskById")
+    .WithOpenApi();
+
+tasksApi.MapGet("/by_user", async (int userId, TaskService taskService) =>
+{
+    try
+    {
+        var tasks = await taskService.GetAllByUserAsync(userId);
+        return Results.Ok(tasks);
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+})
+    .WithName("GetTasksByUserId")
     .WithOpenApi();
 
 tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
