@@ -107,6 +107,9 @@ public class TaskDTO
     [JsonPropertyName("name_project")]
     public string ProjectName { get; set; }
 
+    [JsonPropertyName("user_id")]
+    public int UserId { get; set; }
+
     [JsonPropertyName("active")]
     public bool IsActive { get; set; }
 
@@ -120,6 +123,7 @@ public class TaskDTO
             ProjectName = project.Name,
             ProjectCode = project.Code,
             IsActive = task.IsActive,
+            UserId = task.User.Id,
         };
     }
 
