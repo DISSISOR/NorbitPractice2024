@@ -337,13 +337,22 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description
     var user = await ctx.Users.FindAsync(userId);
     if (user == null) return Results.NotFound("User not found");
 
+    var _date = date ?? DateOnly.FromDateTime(DateTime.Now);
+    var sum_hours = ctx.TimeEntries.AsEnumerable()
+        .Where(e => e.Date == _date && e.User == user)
+        .Aggregate(TimeSpan.Zero, (sum, next) => sum + (TimeSpan)next.Time);
+
+    if (sum_hours + time > new TimeSpan(1, 0, 0, 0)) {
+        return Results.BadRequest("Сумма проводок превышает 24 часа за один день");
+    }
+
     var nextId = ctx.TimeEntries.Any()
         ? ctx.TimeEntries.Select(e => e.Id).Max() + 1
         : 1;
     var entry = new TimeEntry
     {
         Id = nextId,
-        Date = date ?? DateOnly.FromDateTime(DateTime.Now),
+        Date = _date,
         Time = time,
         Description = description,
         Task = task,
