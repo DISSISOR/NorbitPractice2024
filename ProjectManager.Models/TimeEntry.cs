@@ -13,10 +13,6 @@ public class TimeEntry
     public Task Task { get; set; }
     public int TaskId {get; set; }
 
-    [Required]
-    public User User { get; set; }
-    public int UserId {get; set; }
-
     // public TimeEntry(Task task, User user, TimeSpan time, string desc, DateOnly? date)
     // {
     //     if (!task.IsActive) {

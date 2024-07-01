@@ -305,7 +305,8 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
         var since = DateOnly.FromDateTime(DateTime.Now - new TimeSpan(d, 0, 0, 0));
         if (user is User u)
         {
-            var res = await ctx.TimeEntries.Where(e => e.Date >= since && e.User == u).ToListAsync();
+            var entries = await EntriesByUser(ctx, u.Id);
+            var res = entries.Where(e => e.Date >= since).ToList();
             return Results.Ok(res);
         } else
         {
@@ -316,7 +317,7 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
     {
         if (user is User u)
         {
-            var res = await ctx.TimeEntries.Where(e => e.User == u).ToListAsync();
+            var res = await EntriesByUser(ctx, u.Id);
             return Results.Ok(res);
         } else
         {
@@ -328,21 +329,21 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
     .WithName("GetEntries")
     .WithOpenApi();
 
-entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
+entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, ApplicationContext ctx) =>
 {
-    // TODO: проверка, что от пользователя поступило менее 24-х
-    // часов проводок за день
     var task = await ctx.Tasks.FindAsync(taskId);
     if (task == null) return Results.NotFound("Task not found");
-    var user = await ctx.Users.FindAsync(userId);
-    if (user == null) return Results.NotFound("User not found");
+    // var user = await ctx.Users.FindAsync(userId);
+    // if (user == null) return Results.NotFound("User not found");
 
     var _date = date ?? DateOnly.FromDateTime(DateTime.Now);
-    var sum_hours = ctx.TimeEntries.AsEnumerable()
-        .Where(e => e.Date == _date && e.User == user)
+    var entries = await EntriesByUser(ctx, task.UserId);
+    var sum_hours = entries
+        .Where(e => e.Date == _date)
         .Aggregate(TimeSpan.Zero, (sum, next) => sum + (TimeSpan)next.Time);
 
-    if (sum_hours + time > new TimeSpan(1, 0, 0, 0)) {
+    if (sum_hours + time > new TimeSpan(1, 0, 0, 0))
+    {
         return Results.BadRequest("Сумма проводок превышает 24 часа за один день");
     }
 
@@ -356,7 +357,6 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description
         Time = time,
         Description = description,
         Task = task,
-        User = user,
     };
     ctx.TimeEntries.Add(entry);
     await ctx.SaveChangesAsync();
@@ -393,7 +393,8 @@ entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  A
         var user = await ctx.Users.FindAsync(userId);
         if (user is User u)
         {
-            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date.DayOfWeek == day).ToListAsync());
+            var entries = await EntriesByUser(ctx, u.Id);
+            return Results.Ok(entries.Where(e => e.Date.DayOfWeek == day).ToList());
         } else
         {
             return Results.NotFound();
@@ -413,7 +414,8 @@ entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, ApplicationConte
         var user = await ctx.Users.FindAsync(userId);
         if (user is User u)
         {
-            return Results.Ok(await ctx.TimeEntries.Where(e => e.User == u && e.Date == date).ToListAsync());
+            var entries = await EntriesByUser(ctx, u.Id);
+            return Results.Ok(entries.Where(e => e.Date == date).ToList());
         } else
         {
             return Results.NotFound();
@@ -427,6 +429,16 @@ entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, ApplicationConte
     .WithOpenApi();
 
 app.Run();
+
+static async System.Threading.Tasks.Task<List<TimeEntry>> EntriesByUser(ApplicationContext ctx, int userId)
+{
+    var entries = ctx.TimeEntries;
+    var tasks = ctx.Tasks;
+    return await entries.Join(tasks.Where(t => t.UserId == userId),
+        e => e.TaskId, t => t.Id,
+        (e, t) => e
+        ).ToListAsync();
+}
 
 public class AuthOptions
 {
