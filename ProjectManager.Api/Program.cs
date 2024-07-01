@@ -190,7 +190,7 @@ usersApi.MapGet("/{id:int}", async (int id, UserService userService) =>
     .WithName("GetUserByiD")
     .WithOpenApi();
 
-usersApi.MapDelete("/{id:int}", async (int id, UserService userService) =>
+usersApi.MapDelete("/{id:int}", [Authorize(Roles="admin")] async (int id, UserService userService) =>
 {
     try
     {
