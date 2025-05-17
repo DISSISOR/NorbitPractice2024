@@ -25,7 +25,7 @@ public class EnteriesService
 
     public async System.Threading.Tasks.Task AddAsync(TimeEntry time_entry)
     {
-        if( ! time_entry.Task.IsActive ) throw new ArgumentException("Проводка по неактивной задаче");
+        if( time_entry.Task.Status != ProjectManager.Models.Task.ReadyStatus.InProgress ) throw new ArgumentException("Проводка по неактивной задаче");
         _ctx.Set<TimeEntry>().Add(time_entry);
         await _ctx.SaveChangesAsync();
     }

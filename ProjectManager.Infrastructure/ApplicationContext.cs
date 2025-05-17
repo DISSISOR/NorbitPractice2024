@@ -11,7 +11,8 @@ public class ApplicationContext: DbContext
         Database.EnsureCreated();
         if (!Users.Any())
         {
-            var admin = User.WithPassword(1, "admin", "admin", Role.Admin);
+            var admin = User.WithPassword(1, "admin", "admin");
+            admin.IsAdmin = true;
             Users.Add(admin);
             SaveChanges();
         }
@@ -27,5 +28,6 @@ public class ApplicationContext: DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Task> Tasks => Set<Task>();
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
-
+    public DbSet<Role> Roles => Set<Role>();
 }
+

@@ -2,6 +2,9 @@ namespace ProjectManager.Models;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 public class Task
 {
     public int Id { get; set; }
@@ -12,11 +15,11 @@ public class Task
     public string ProjectCode { get; set; }
 
     [Required]
-    public User User { get; set; }
-    [ForeignKey("User")]
-    public int UserId { get; set; }
+    public Role Role { get; set; }
+    [ForeignKey("Role")]
+    public int RoleId { get; set; }
 
-    public bool IsActive { get; set; }
+    // public bool IsActive { get; set; }
 
     // public Task(int id, string name, Project project, User user, bool isActive = true)
     // {
@@ -28,4 +31,14 @@ public class Task
     //     this.UserId = user.Id;
     //     this.IsActive = isActive;
     // }
+    public enum ReadyStatus {
+		[JsonPropertyName("todo")]
+		Todo,
+		[JsonPropertyName("in_progress")]
+		InProgress,
+		[JsonPropertyName("done")]
+		Done,
+    }
+
+    public ReadyStatus Status { get; set; }
 }

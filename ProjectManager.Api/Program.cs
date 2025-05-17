@@ -127,6 +127,8 @@ var loginApi = app.MapGroup("/login").WithOpenApi()
     .WithTags("Auth");
 var entriesApi = app.MapGroup("/entries").WithOpenApi()
     .WithTags("Entries");
+var rolesApi = app.MapGroup("/roles").WithOpenApi()
+    .WithTags("Roles");
 
 // loginApi.MapPost("/register", (string username, string password) =>
 // {
@@ -134,15 +136,24 @@ var entriesApi = app.MapGroup("/entries").WithOpenApi()
 //     .WithName("Register")
 //     .WithOpenApi();
 
-loginApi.MapPost("/register", [Authorize(Roles="admin")] async (string name, string password, bool? isAdmin, UserService userService) =>
+loginApi.MapPost("/register", [Authorize(Roles="admin")] async (string name, string password, bool? isAdmin, bool? isManager, UserService userService) =>
 {
     var nextId = userService.GetNextId();
-    var role = Role.User;
+    // var role = Role.User;
+    // var isUserAdmin = false;
+    // if (isAdmin ?? false)
+    // {
+    //     isUserAdmin ;
+    // }
+    var user = User.WithPassword(nextId, name, password);
     if (isAdmin ?? false)
     {
-        role = Role.Admin;
+        user.IsAdmin = true;
     }
-    var user = User.WithPassword(nextId, name, password, role);
+    if (isManager ?? false)
+    {
+        user.IsManager = true;
+    }
     await userService.AddAsync(user);
     return Results.Created($"/users/{user.Id}", user);
 })
@@ -156,7 +167,7 @@ loginApi.MapPost("/{username}", async (string username, string password, UserSer
     var user = await userService.GetByNameAsync(username);
     var claims = new List<Claim> {
         new Claim(ClaimTypes.Name, username),
-        new Claim(ClaimsIdentity.DefaultRoleClaimType, user.RoleAsString()),
+        new Claim(ClaimsIdentity.DefaultRoleClaimType, user.PermAsString()),
         new Claim(ClaimTypes.Hash, user.Hash),
     };
     var jwt = new JwtSecurityToken(
@@ -170,7 +181,7 @@ loginApi.MapPost("/{username}", async (string username, string password, UserSer
         access_token = new JwtSecurityTokenHandler().WriteToken(jwt),
         id = user.Id,
         name = user.Name,
-        role = user.RoleAsString(),
+        role = user.PermAsString(),
     };
     return Results.Json(response);
 })
@@ -273,21 +284,19 @@ tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAll
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, string projectCode, int userId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService) =>
+tasksApi.MapPost("/", async (string name, string projectCode, int roleId, ProjectManager.Models.Task.ReadyStatus? status, TaskService taskService, ProjectService projectService, UserService userService) =>
 {
     var project = await projectService.GetByCodeAsync(projectCode);
     if (project == null) return Results.NotFound("Проект не найден");
-    var user = await userService.GetByIdAsync(userId);
-    if (user == null) return Results.NotFound("Пользователь не найден");
+    // var user = await userService.GetByIdAsync(userId);
+    // if (user == null) return Results.NotFound("Пользователь не найден");
 
     var nextId = taskService.GetNextId();
     var task = new ProjectManager.Models.Task {
         Id = nextId,
-        // UserId = userId,
-        User = user,
         Name = name,
         Project = project,
-        IsActive = isActive ?? true,
+        Status = status ?? ProjectManager.Models.Task.ReadyStatus.InProgress,
     };
     // var task = new ProjectManager.Models.Task(nextId, name, project, user, isActive ?? true);
     await taskService.AddAsync(task);
@@ -304,19 +313,19 @@ tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
     .WithName("GetTaskById")
     .WithOpenApi();
 
-tasksApi.MapGet("/by_user", async (int userId, TaskService taskService) =>
-{
-    try
-    {
-        var tasks = await taskService.GetAllByUserAsync(userId);
-        return Results.Ok(tasks);
-    } catch (ArgumentException ex)
-    {
-        return Results.NotFound(ex.Message);
-    }
-})
-    .WithName("GetTasksByUserId")
-    .WithOpenApi();
+// tasksApi.MapGet("/by_user", async (int userId, TaskService taskService) =>
+// {
+    // try
+    // {
+        // var tasks = await taskService.GetAllByUserAsync(userId);
+        // return Results.Ok(tasks);
+    // } catch (ArgumentException ex)
+    // {
+        // return Results.NotFound(ex.Message);
+    // }
+// })
+    // .WithName("GetTasksByUserId")
+    // .WithOpenApi();
 
 tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
 {
@@ -332,11 +341,11 @@ tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
     .WithName("DeleteTask")
     .WithOpenApi();
 
-tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  TaskService taskService) =>
+tasksApi.MapPut("/{id:int}", async (int id, string? name, ProjectManager.Models.Task.ReadyStatus? status,  TaskService taskService) =>
 {
     try
     {
-        await taskService.Update(id, name, isActive);
+        await taskService.Update(id, name, status);
         return Results.NoContent();
     } catch (ArgumentException ex)
     {
@@ -395,15 +404,15 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
     .WithName("GetEntries")
     .WithOpenApi();
 
-entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, ApplicationContext ctx) =>
+entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
 {
     var task = await ctx.Tasks.FindAsync(taskId);
     if (task == null) return Results.NotFound("Task not found");
-    // var user = await ctx.Users.FindAsync(userId);
-    // if (user == null) return Results.NotFound("User not found");
+    var user = await ctx.Users.FindAsync(userId);
+    if (user == null) return Results.NotFound("User not found");
 
     var _date = date ?? DateOnly.FromDateTime(DateTime.Now);
-    var entries = await EntriesByUser(ctx, task.UserId);
+    var entries = await EntriesByUser(ctx, userId);
     var sum_hours = entries
         .Where(e => e.Date == _date)
         .Aggregate(TimeSpan.Zero, (sum, next) => sum + (TimeSpan)next.Time);
@@ -423,6 +432,8 @@ entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description
         Time = time,
         Description = description,
         Task = task,
+        User = user,
+        UserId = user.Id,
     };
     ctx.TimeEntries.Add(entry);
     await ctx.SaveChangesAsync();
@@ -494,16 +505,34 @@ entriesApi.MapGet("/by_day", async (DateOnly date, int? userId, ApplicationConte
     .WithName("GetEntriesByDay")
     .WithOpenApi();
 
+rolesApi.MapGet("/", async (ApplicationContext ctx) =>
+{
+	return Results.Ok(await ctx.Set<Role>().ToListAsync());
+})
+    .WithName("GetRoles")
+    .WithOpenApi();
+
+rolesApi.MapPost("/", async (string name, ApplicationContext ctx) =>
+{
+    var nextId = ctx.Roles.Any()
+        ? ctx.Roles.Select(r => r.Id).Max() + 1
+        : 1;
+	var role = new Role(nextId, name);
+	ctx.Roles.Add(role);
+	await ctx.SaveChangesAsync();
+	return Results.Created($"/roles/{role.Id}", role);
+})
+    .WithName("CreateRole")
+    .WithOpenApi();
+
 app.Run();
 
 static async System.Threading.Tasks.Task<List<TimeEntry>> EntriesByUser(ApplicationContext ctx, int userId)
 {
     var entries = ctx.TimeEntries;
-    var tasks = ctx.Tasks;
-    return await entries.Join(tasks.Where(t => t.UserId == userId),
-        e => e.TaskId, t => t.Id,
-        (e, t) => e
-        ).ToListAsync();
+    // var tasks = ctx.Tasks;
+    return await entries.Where(e => e.UserId == userId)
+       .ToListAsync();
 }
 
 public class AuthOptions

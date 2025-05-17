@@ -12,38 +12,29 @@ public class User
     public string Name { get; set; }
     [JsonIgnore]
     public string Hash { get; set;}
-    public Role Role { get; set; }
+    // public Role Role { get; set; }
+    public List<Role> Roles { get; set; } = new();
+	public bool IsAdmin { get; set; }
+	public bool IsManager { get; set; }
 
     public User(int id, string name, string hash)
-        : this(id, name, hash, Role.User){
-    }
-
-    public User(int id, string name, string hash, Role role)
     {
         this.Id = id;
         this.Name = name;
         this.Hash = hash;
-        this.Role = role;
-    }
-
-    public string RoleAsString()
-    {
-        return Role switch {
-            Role.Admin => "admin",
-            Role.User => "user",
-        };
-    }
-
-    public static User WithPassword(int id, string name, string password, Role role)
-    {
-        var hash = GenHash(name, password);
-        return new User(id, name, hash, role);
     }
 
     public static User WithPassword(int id, string name, string password)
     {
-        return WithPassword(id, name, password, Role.User);
+        var hash = GenHash(name, password);
+        return new User(id, name, hash);
     }
+
+	public string PermAsString() {
+		if (IsAdmin) return "admin";
+		if (IsManager) return "manager";
+		return "user";
+	}
 
     public static string GenHash(string name, string password)
     {
@@ -59,8 +50,3 @@ public class User
     }
 }
 
-public enum Role
-{
-    Admin,
-    User,
-}

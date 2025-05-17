@@ -25,14 +25,16 @@ public class TaskService
         return await _ctx.Set<Task>().ToListAsync();
     }
 
-    public async Task<List<Task>> GetAllByUserAsync(int userId)
-    {
-        if (_ctx.Set<User>().FindAsync(userId).Result == null)
-        {
-            throw new ArgumentException("Не найден пользователь");
-        }
-        return await _ctx.Set<Task>().Where(t => t.UserId == userId).ToListAsync();
-    }
+    // public async Task<List<Task>> GetAllByUserAsync(int userId)
+    // {
+	//  #  var user = _ctx.Set<User>().FindAsync(userId).Result;
+    //     if (user == null)
+    //     {
+    //         throw new ArgumentException("Не найден пользователь");
+    //     }
+    //     // return await _ctx.Set<Task>().Where(t => t.UserId == userId).ToListAsync();
+    //     return await user..ToListAsync();
+    // }
 
     public async System.Threading.Tasks.Task AddAsync(Task task)
     {
@@ -65,13 +67,16 @@ public class TaskService
             : 1;
     }
 
-    public async System.Threading.Tasks.Task Update(int id, string? name, bool? isActive)
+    public async System.Threading.Tasks.Task Update(int id, string? name, ProjectManager.Models.Task.ReadyStatus? status)
     {
         var task = await _ctx.Tasks.FindAsync(id);
         if (task == null) throw new ArgumentException("Не найдена задача");
 
         if (name != null) task.Name = (string)name;
-        if (isActive != null) task.IsActive = (bool)isActive;
+        // if (status != null) 
+        if (status is ProjectManager.Models.Task.ReadyStatus someStatus) {
+	        task.Status = someStatus;
+        }
 
         await _ctx.SaveChangesAsync();
     }

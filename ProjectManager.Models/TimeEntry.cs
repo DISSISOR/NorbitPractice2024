@@ -11,7 +11,13 @@ public class TimeEntry
     public string? Description { get; set; }
     [Required]
     public Task Task { get; set; }
+    [ForeignKey("Task")]
     public int TaskId {get; set; }
+
+    [Required]
+    public User User { get; set; }
+    [ForeignKey("User")]
+    public int UserId {get; set; }
 
     // public TimeEntry(Task task, User user, TimeSpan time, string desc, DateOnly? date)
     // {
