@@ -4,17 +4,21 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 public class User
 {
-
+	[JsonPropertyName("id")]
     public int Id { get; set; }
+	[JsonPropertyName("name")]
     public string Name { get; set; }
     [JsonIgnore]
     public string Hash { get; set;}
     // public Role Role { get; set; }
     public List<Role> Roles { get; set; } = new();
+	[JsonPropertyName("is_admin")]
 	public bool IsAdmin { get; set; }
+	[JsonPropertyName("is_manager")]
 	public bool IsManager { get; set; }
 
     public User(int id, string name, string hash)

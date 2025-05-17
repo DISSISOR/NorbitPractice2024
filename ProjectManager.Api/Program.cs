@@ -87,7 +87,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 	}
 );
 builder.Services.AddAuthorization();
-
+builder.Services.AddCors(options =>
+{
+	options.AddPolicy("AllowFrontend", policy =>
+	{
+	    policy.WithOrigins("http://localhost:5100", "http://localhost:5173")
+	          .WithMethods("GET", "POST", "PUT", "DELETE")
+	          .WithHeaders("Content-Type", "Authorization") // Explicitly allow Auth header
+	          .AllowCredentials();
+	});
+});
 
 var app = builder.Build();
 
@@ -101,7 +110,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(builder => builder.AllowAnyOrigin());
+// app.UseCors(builder => builder.AllowAnyOrigin());
+app.UseCors("AllowFrontend");
 
 app.Use(async (context, next) => {
     var request = context.Request;
@@ -169,12 +179,13 @@ loginApi.MapPost("/{username}", async (string username, string password, UserSer
         new Claim(ClaimTypes.Name, username),
         new Claim(ClaimsIdentity.DefaultRoleClaimType, user.PermAsString()),
         new Claim(ClaimTypes.Hash, user.Hash),
+        new Claim("uid", user.Id.ToString())
     };
     var jwt = new JwtSecurityToken(
             issuer: AuthOptions.ISSUER,
             audience: AuthOptions.AUDIENCE,
             claims: claims,
-            expires: DateTime.UtcNow.Add(TimeSpan.FromMinutes(10)),
+            expires: DateTime.UtcNow.Add(TimeSpan.FromDays(10)),
             signingCredentials: new SigningCredentials(AuthOptions.GetSymmetricSecurityKey(), SecurityAlgorithms.HmacSha256));
     var response = new
     {
@@ -188,7 +199,7 @@ loginApi.MapPost("/{username}", async (string username, string password, UserSer
     .WithName("Login")
     .WithOpenApi();
 
-usersApi.MapGet("/", [Authorize(Roles="admin")] async (UserService userService) => await userService.GetAllAsync())
+usersApi.MapGet("/", async (UserService userService) => await userService.GetAllAsync())
     .WithName("GetUsers")
     .WithOpenApi();
 
