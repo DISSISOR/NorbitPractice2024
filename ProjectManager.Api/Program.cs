@@ -471,7 +471,7 @@ entriesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
     await ctx.SaveChangesAsync();
     return Results.NoContent();
 })
-    .WithName("DelteEntry")
+    .WithName("DeleteEntry")
     .WithOpenApi();
 
 entriesApi.MapGet("/by_day_of_week/{day}", async (DayOfWeek day, int? userId,  ApplicationContext ctx) =>
@@ -536,12 +536,39 @@ rolesApi.MapPost("/", async (string name, ApplicationContext ctx) =>
     .WithName("CreateRole")
     .WithOpenApi();
 
+rolesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
+{
+    var role = await ctx.Roles.FindAsync(id);
+    if (role == null) return Results.NotFound();
+
+    ctx.Roles.Remove(role);
+    await ctx.SaveChangesAsync();
+    return Results.NoContent();
+})
+    .WithName("DeleteRole")
+    .WithOpenApi();
+
+rolesApi.MapGet("/{id:int}/users", async (int id, ApplicationContext ctx) =>
+{
+    var role = await ctx.Roles
+    	.Include(r => r.Users)
+    	.AsNoTracking()
+    	.FirstOrDefaultAsync(r => r.Id == id);
+    if (role == null) return Results.NotFound();
+
+    var users = role.Users;
+    return Results.Ok(users);
+})
+    .WithName("GetRoleUsers")
+    .WithOpenApi()
+    .Produces<List<User>>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status404NotFound);
+
 app.Run();
 
 static async System.Threading.Tasks.Task<List<TimeEntry>> EntriesByUser(ApplicationContext ctx, int userId)
 {
     var entries = ctx.TimeEntries;
-    // var tasks = ctx.Tasks;
     return await entries.Where(e => e.UserId == userId)
        .ToListAsync();
 }
