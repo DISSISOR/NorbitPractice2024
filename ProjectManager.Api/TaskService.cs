@@ -22,7 +22,7 @@ public class TaskService
 
     public async Task<List<Task>> GetAllAsync()
     {
-        return await _ctx.Set<Task>().ToListAsync();
+        return await _ctx.Set<Task>().Include(t => t.Project).ToListAsync();
     }
 
     // public async Task<List<Task>> GetAllByUserAsync(int userId)
@@ -67,15 +67,15 @@ public class TaskService
             : 1;
     }
 
-    public async System.Threading.Tasks.Task Update(int id, string? name, ProjectManager.Models.Task.ReadyStatus? status)
+    public async System.Threading.Tasks.Task Update(int id, string? name, bool? isActive)
     {
         var task = await _ctx.Tasks.FindAsync(id);
         if (task == null) throw new ArgumentException("Не найдена задача");
 
         if (name != null) task.Name = (string)name;
-        // if (status != null) 
-        if (status is ProjectManager.Models.Task.ReadyStatus someStatus) {
-	        task.Status = someStatus;
+        // if (isActive != null) 
+        if (isActive is bool someActive) {
+	        task.IsActive = someActive;
         }
 
         await _ctx.SaveChangesAsync();

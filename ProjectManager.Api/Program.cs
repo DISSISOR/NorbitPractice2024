@@ -31,8 +31,6 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<TaskService>();
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddCors();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -203,12 +201,33 @@ usersApi.MapGet("/", async (UserService userService) => await userService.GetAll
     .WithName("GetUsers")
     .WithOpenApi();
 
+usersApi.MapGet("/me", [Authorize] async (ClaimsPrincipal userPrincipal, ApplicationContext ctx) => {
+	 var uid = userPrincipal.GetUserId();
+	 return Results.Ok(uid);
+})
+    .WithName("GetMe")
+    .WithOpenApi();
 
-usersApi.MapGet("/{id:int}", async (int id, UserService userService) =>
-    await userService.GetByIdAsync(id)
-        is User user
-            ? Results.Ok(user)
-            : Results.NotFound())
+usersApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) => {
+	    var res =  await ctx.Users
+	        .Where(u => u.Id == id)
+	        .Select(u => new
+	        {
+	            Id = u.Id,
+	            Name = u.Name,
+	            IsManager = u.IsManager,
+	            IsAdmin = u.IsAdmin,
+	            Roles = u.Roles.Select(r => new
+	            {
+	                Id = r.Id,
+	                Name = r.Name
+	            }).ToList()
+	        })
+	        .AsNoTracking()
+	        .FirstOrDefaultAsync();
+        if (res == null) return Results.NotFound("User not found");
+        return Results.Ok(res);
+})
     .WithName("GetUserByiD")
     .WithOpenApi();
 
@@ -224,6 +243,20 @@ usersApi.MapDelete("/{id:int}", [Authorize(Roles="admin")] async (int id, UserSe
     }
 })
     .WithName("DeleteUser")
+    .WithOpenApi();
+
+usersApi.MapPut("/{id:int}", [Authorize(Roles="admin")] async (int id, string? name, string? password, UserService userService) =>
+{
+    try
+    {
+        await userService.Update(id, name, password);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+})
+    .WithName("UpdateUser")
     .WithOpenApi();
 
 projectsApi.MapGet("/", async (ProjectService projectService) => await projectService.GetAllAsync())
@@ -295,22 +328,28 @@ tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAll
     .WithName("GetTasks")
     .WithOpenApi();
 
-tasksApi.MapPost("/", async (string name, string projectCode, int roleId, ProjectManager.Models.Task.ReadyStatus? status, TaskService taskService, ProjectService projectService, UserService userService) =>
+tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService, ApplicationContext ctx) =>
 {
     var project = await projectService.GetByCodeAsync(projectCode);
     if (project == null) return Results.NotFound("Проект не найден");
     // var user = await userService.GetByIdAsync(userId);
     // if (user == null) return Results.NotFound("Пользователь не найден");
 
+	var role = await ctx.Roles.FindAsync(roleId);
+	if (role == null) return Results.NotFound("Роль не найдена");
+
     var nextId = taskService.GetNextId();
     var task = new ProjectManager.Models.Task {
         Id = nextId,
         Name = name,
         Project = project,
-        Status = status ?? ProjectManager.Models.Task.ReadyStatus.InProgress,
+        IsActive = isActive ?? true,
+		Role = role,
+		RoleId = role.Id,
     };
     // var task = new ProjectManager.Models.Task(nextId, name, project, user, isActive ?? true);
     await taskService.AddAsync(task);
+    // await ctx.SaveChangesAsync();
     return Results.Created($"/tasks/{task.Id}", task);
 })
     .WithName("CreateTask")
@@ -352,11 +391,11 @@ tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
     .WithName("DeleteTask")
     .WithOpenApi();
 
-tasksApi.MapPut("/{id:int}", async (int id, string? name, ProjectManager.Models.Task.ReadyStatus? status,  TaskService taskService) =>
+tasksApi.MapPut("/{id:int}", async (int id, string? name, bool? isActive,  TaskService taskService) =>
 {
     try
     {
-        await taskService.Update(id, name, status);
+        await taskService.Update(id, name, isActive);
         return Results.NoContent();
     } catch (ArgumentException ex)
     {
@@ -415,8 +454,15 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
     .WithName("GetEntries")
     .WithOpenApi();
 
-entriesApi.MapPost("/", async (DateOnly? date, TimeSpan time, string description, int taskId, int userId, ApplicationContext ctx) =>
+entriesApi.MapPost("/", [Authorize] async (DateOnly? date, ClaimsPrincipal userClaim, TimeSpan time, string description, int taskId, ApplicationContext ctx) =>
 {
+	var userIdStr = userClaim.FindFirstValue("uid");
+
+	if (!int.TryParse(userIdStr, out int userId))
+    {
+        return Results.Unauthorized();
+    }
+
     var task = await ctx.Tasks.FindAsync(taskId);
     if (task == null) return Results.NotFound("Task not found");
     var user = await ctx.Users.FindAsync(userId);
@@ -550,18 +596,48 @@ rolesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
 
 rolesApi.MapGet("/{id:int}/users", async (int id, ApplicationContext ctx) =>
 {
-    var role = await ctx.Roles
-    	.Include(r => r.Users)
-    	.AsNoTracking()
-    	.FirstOrDefaultAsync(r => r.Id == id);
-    if (role == null) return Results.NotFound();
+	var result = await ctx.Roles
+		.Where(r => r.Id == id)
+		.Select(r => new
+		{
+		    Users = r.Users.Select(u => new
+		    {
+		        u.Id,
+		        u.Name
+		        // Other properties as needed
+		    })
+		})
+		.AsNoTracking()
+		.FirstOrDefaultAsync();
 
-    var users = role.Users;
-    return Results.Ok(users);
+	return result is null ? Results.NotFound() : Results.Ok(result.Users);
 })
     .WithName("GetRoleUsers")
     .WithOpenApi()
     .Produces<List<User>>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status404NotFound);
+
+
+rolesApi.MapPut("/{roleId:int}/adduser/{userId:int}", async (int roleId, int userId, ApplicationContext ctx) =>
+{
+    var user = await ctx.Users.FindAsync(userId);
+    if (user == null) return Results.NotFound();
+
+    var role = await ctx.Roles
+    	.Include(r => r.Users)
+    	.FirstOrDefaultAsync(r => r.Id == roleId);
+    if (role == null) return Results.NotFound();
+    if (role.Users.Any(u => user.Id == userId)) {
+	    return Results.Conflict("User already has this role");
+    }
+
+    role.Users.Add(user);
+	await ctx.SaveChangesAsync();
+    return Results.Ok($"Role {role.Name} added to user {user.Name}");
+
+})
+    .WithName("AddUserRole")
+    .WithOpenApi()
     .Produces(StatusCodes.Status404NotFound);
 
 app.Run();
@@ -580,4 +656,26 @@ public class AuthOptions
     const string KEY = "mysupersecret_secretsecretsecretkey!123";
     public static SymmetricSecurityKey GetSymmetricSecurityKey() =>
         new SymmetricSecurityKey(Encoding.UTF8.GetBytes(KEY));
+}
+
+
+public static class ClaimsPrincipalExtensions
+{
+    public static int GetUserId(this ClaimsPrincipal principal)
+    {
+        var userIdStr = principal.FindFirstValue("uid");
+        if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int userId))
+        {
+            throw new UnauthorizedAccessException("Invalid user ID claim");
+        }
+
+        return userId;
+    }
+
+    public static bool TryGetUserId(this ClaimsPrincipal principal, out int userId)
+    {
+        userId = default;
+        var userIdStr = principal.FindFirstValue("uid");
+        return !string.IsNullOrEmpty(userIdStr) && int.TryParse(userIdStr, out userId);
+    }
 }

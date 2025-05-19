@@ -19,7 +19,7 @@ public class Task
     [ForeignKey("Role")]
     public int RoleId { get; set; }
 
-    // public bool IsActive { get; set; }
+	public bool IsActive { get; set; }
 
     // public Task(int id, string name, Project project, User user, bool isActive = true)
     // {
@@ -31,14 +31,14 @@ public class Task
     //     this.UserId = user.Id;
     //     this.IsActive = isActive;
     // }
-    public enum ReadyStatus {
-		[JsonPropertyName("todo")]
-		Todo,
-		[JsonPropertyName("in_progress")]
-		InProgress,
-		[JsonPropertyName("done")]
-		Done,
-    }
+    // public enum ReadyStatus {
+	// 	[JsonPropertyName("todo")]
+	// 	Todo,
+	// 	[JsonPropertyName("in_progress")]
+	// 	InProgress,
+	// 	[JsonPropertyName("done")]
+	// 	Done,
+    // }
 
-    public ReadyStatus Status { get; set; }
+    // public ReadyStatus Status { get; set; }
 }

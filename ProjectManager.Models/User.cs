@@ -15,7 +15,7 @@ public class User
     [JsonIgnore]
     public string Hash { get; set;}
     // public Role Role { get; set; }
-    public List<Role> Roles { get; set; } = new();
+    public ICollection<Role> Roles { get; set; } = new List<Role>();
 	[JsonPropertyName("is_admin")]
 	public bool IsAdmin { get; set; }
 	[JsonPropertyName("is_manager")]

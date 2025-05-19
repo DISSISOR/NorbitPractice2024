@@ -68,4 +68,17 @@ public class UserService
         var hash = User.GenHash(name, password);
         return user.Hash == hash;
     }
+
+    public async System.Threading.Tasks.Task Update(int id, string? name, string? password)
+    {
+        var user = await _ctx.Users.FindAsync(id);
+        if (user == null) throw new ArgumentException("Не найден пользователь");
+
+        if (name != null) user.Name = (string)name;
+		if (password is string newPassword) {
+			var hash = User.GenHash(user.Name, newPassword);
+			user.Hash = hash;
+		}
+        await _ctx.SaveChangesAsync();
+    }
 }

@@ -11,10 +11,15 @@ public class ApplicationContext: DbContext
         Database.EnsureCreated();
         if (!Users.Any())
         {
-            var admin = User.WithPassword(1, "admin", "admin");
+            var admin = User.WithPassword(1, "admin", "admin123");
             admin.IsAdmin = true;
             Users.Add(admin);
             SaveChanges();
+        }
+        if (!Roles.Any()) {
+	        var role = new Role(1, "base");
+	        Roles.Add(role);
+	        SaveChanges();
         }
     }
     protected override void OnModelCreating(ModelBuilder builder)
