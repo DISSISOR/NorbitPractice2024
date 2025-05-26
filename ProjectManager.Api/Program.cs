@@ -324,7 +324,13 @@ projectsApi.MapGet("/{code:regex([0-9]+)}/tasks", async (string code, Applicatio
     .WithName("GetProjectTasks")
     .WithOpenApi();
 
-tasksApi.MapGet("/", async (TaskService taskService) => await taskService.GetAllAsync())
+tasksApi.MapGet("/", async (TaskService taskService, ApplicationContext ctx) => {
+	var task = await ctx.Tasks.Include(t => t.Role).Include(t => t.Project).ToListAsync();
+	if (task == null) {
+		return Results.NotFound("Задача не найдена");
+	}
+	return Results.Ok(task);
+})
     .WithName("GetTasks")
     .WithOpenApi();
 
