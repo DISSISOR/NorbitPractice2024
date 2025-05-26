@@ -627,7 +627,7 @@ rolesApi.MapPut("/{roleId:int}/adduser/{userId:int}", async (int roleId, int use
     	.Include(r => r.Users)
     	.FirstOrDefaultAsync(r => r.Id == roleId);
     if (role == null) return Results.NotFound();
-    if (role.Users.Any(u => user.Id == userId)) {
+    if (role.Users.Contains(user)) {
 	    return Results.Conflict("User already has this role");
     }
 
