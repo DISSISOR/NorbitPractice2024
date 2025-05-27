@@ -154,6 +154,10 @@ loginApi.MapPost("/register", [Authorize(Roles="admin")] async (string name, str
     //     isUserAdmin ;
     // }
     var user = User.WithPassword(nextId, name, password);
+    var existingUser = await userService.GetByNameAsync(name);
+    if (existingUser != null) {
+	    return Results.Conflict($"Пользователь с именем {name} уже существует");
+    }
     if (isAdmin ?? false)
     {
         user.IsAdmin = true;
