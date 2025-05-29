@@ -17,22 +17,22 @@ public class UserService
 
     public async Task<User?> GetByIdAsync(int id)
     {
-        return await _ctx.Set<User>().FindAsync(id);
+        return await _ctx.Users.FindAsync(id);
     }
 
     public async Task<User?> GetByNameAsync(string name)
     {
-        return await _ctx.Set<User>().SingleOrDefaultAsync(u => u.Name == name);
+        return await _ctx.Users.SingleOrDefaultAsync(u => u.Name == name);
     }
 
     public async Task<List<User>> GetAllAsync()
     {
-        return await _ctx.Set<User>().ToListAsync();
+        return await _ctx.Users.ToListAsync();
     }
 
     public async System.Threading.Tasks.Task AddAsync(User user)
     {
-        _ctx.Set<User>().Add(user);
+        _ctx.Users.Add(user);
         await _ctx.SaveChangesAsync();
     }
 
@@ -40,7 +40,7 @@ public class UserService
     {
         if (user != null)
         {
-            _ctx.Set<User>().Remove(user);
+            _ctx.Users.Remove(user);
             await _ctx.SaveChangesAsync();
         }
     }
@@ -49,14 +49,14 @@ public class UserService
     {
         var user = await GetByIdAsync(id);
         if (user == null) throw new ArgumentException("Не найден пользователь");
-        _ctx.Set<User>().Remove(user);
+        _ctx.Users.Remove(user);
         await _ctx.SaveChangesAsync();
     }
 
 
     public int GetNextId()
     {
-        return _ctx.Set<User>().Any()
+        return _ctx.Users.Any()
             ? _ctx.Users.Select(u => u.Id).Max() + 1
             : 1;
     }
