@@ -1,8 +1,8 @@
+namespace ProjectManager.Api;
+
 using Microsoft.EntityFrameworkCore;
 using ProjectManager.Infrastructure;
 using ProjectManager.Models;
-
-namespace ProjectManager.Api.Properties;
 
 public class EnteriesService
 {
@@ -15,12 +15,12 @@ public class EnteriesService
 
     public async Task<TimeEntry?> GetByIdAsync(int id)
     {
-        return await _ctx.Set<TimeEntry>().FindAsync(id);
+        return await _ctx.Set<TimeEntry>().Include(e => e.Task).FirstOrDefaultAsync(e => e.Id == id);
     }
 
     public async Task<List<TimeEntry>> GetAllAsync()
     {
-        return await _ctx.Set<TimeEntry>().ToListAsync();
+        return await _ctx.Set<TimeEntry>().Include(e => e.Task).ToListAsync();
     }
 
     public async System.Threading.Tasks.Task AddAsync(TimeEntry time_entry)

@@ -30,6 +30,7 @@ builder.Services.AddDbContext<ApplicationContext>(options => options.UseNpgsql(c
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<EnteriesService>();
 
 builder.Services.AddCors();
 builder.Services.AddEndpointsApiExplorer();
@@ -427,7 +428,7 @@ tasksApi.MapGet("/{id:int}/entries", async (int id, ApplicationContext ctx) =>
     .WithName("GetTaskEntries")
     .WithOpenApi();
 
-entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
+entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx, EnteriesService enteriesService) =>
 {
     User? user = null;
     if (userId is int id)
@@ -445,7 +446,8 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
             return Results.Ok(res);
         } else
         {
-            var res = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+            // var res = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+            var res = await enteriesService.GetAllAsync();
             return Results.Ok(res);
         }
     } else
@@ -456,7 +458,8 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx) =>
             return Results.Ok(res);
         } else
         {
-            var res = await ctx.TimeEntries.ToListAsync();
+            //var res = await ctx.TimeEntries.ToListAsync();
+            var res = await enteriesService.GetAllAsync();
             return Results.Ok(res);
         }
     }
@@ -511,7 +514,7 @@ entriesApi.MapPost("/", [Authorize] async (DateOnly? date, ClaimsPrincipal userC
 
 entriesApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
 {
-    var entry = await ctx.TimeEntries.FindAsync(id);
+    var entry = await ctx.TimeEntries.Include(e => e.Task).FirstOrDefaultAsync(e => e.Id == id);
     if (entry == null) return Results.NotFound();
     return Results.Ok(entry);
 })
@@ -656,6 +659,7 @@ static async System.Threading.Tasks.Task<List<TimeEntry>> EntriesByUser(Applicat
 {
     var entries = ctx.TimeEntries;
     return await entries.Where(e => e.UserId == userId)
+       .Include(e => e.Task)
        .ToListAsync();
 }
 
