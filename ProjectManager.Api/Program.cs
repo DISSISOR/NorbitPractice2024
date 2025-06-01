@@ -339,6 +339,13 @@ tasksApi.MapGet("/", async (TaskService taskService, ApplicationContext ctx) => 
     .WithName("GetTasks")
     .WithOpenApi();
 
+tasksApi.MapGet("/by_role/{roleId:int}", async (int roleId, TaskService taskService, ApplicationContext ctx) => {
+	var tasks = await ctx.Tasks.Where(t => t.RoleId == roleId).ToListAsync();
+	return Results.Ok(tasks);
+})
+    .WithName("GetTasksByRole")
+    .WithOpenApi();
+
 tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService, ApplicationContext ctx) =>
 {
     var project = await projectService.GetByCodeAsync(projectCode);
