@@ -346,6 +346,18 @@ tasksApi.MapGet("/by_role/{roleId:int}", async (int roleId, TaskService taskServ
     .WithName("GetTasksByRole")
     .WithOpenApi();
 
+tasksApi.MapGet("/by_user/{userId:int}", async (int userId, TaskService taskService, UserService userService, ApplicationContext ctx) => {
+	var user = await userService.GetByIdAsync(userId);
+	if (user == null) {
+		return Results.NotFound("Пользователь не найден");
+	}
+	var tasks = await ctx.Tasks.Include(t => t.Role).Where(t => t.Role.Users.Any(u => u.Id == userId))
+		.ToListAsync();
+	return Results.Ok(tasks);
+})
+    .WithName("GetTasksByUser")
+    .WithOpenApi();
+
 tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService, ApplicationContext ctx) =>
 {
     var project = await projectService.GetByCodeAsync(projectCode);
