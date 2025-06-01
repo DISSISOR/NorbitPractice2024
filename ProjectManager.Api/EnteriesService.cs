@@ -55,27 +55,29 @@ public class EnteriesService
             : 1;
     }
 
-    // public async System.Threading.Tasks.Task Update(int id, int user_id, int task_id, 
-    //     DateOnly date, TimeSpan? time, string? description)
-    // {
-    //     var time_entry = await _ctx.TimeEntries.FindAsync(id);
-    //     if(user_id != time_entry.UserId) throw new ArgumentException("Редактирование проводок другого пользовател недоступно");
-    //     if (time_entry == null) throw new ArgumentException("Не найдена проводка");
+    public async System.Threading.Tasks.Task Update(int id, int user_id, int? task_id, 
+        DateOnly? date, TimeSpan? time, string? description)
+    {
+        var time_entry = await _ctx.TimeEntries.FindAsync(id);
+        if(user_id != time_entry.UserId) throw new ArgumentException("Редактирование проводок другого пользовател недоступно");
+        if (time_entry == null) throw new ArgumentException("Не найдена проводка");
 
-    //     if (date != null) time_entry.Date = (DateOnly)date;
-    //     if (time != null) time_entry.Time = (TimeSpan)time;
-    //     if (description != null) time_entry.Description = (string)description;
-        
-    //     var task = await _ctx.Tasks.FindAsync(task_id);
-    //     if (task != null)
-    //     {
-    //         if (task.IsActive)
-    //         {
-    //             time_entry.Task = task;
-    //             time_entry.TaskId = task_id;
-    //         } else if (task_id != time_entry.TaskId) throw new ArgumentException("Проводка по неактивной задаче");
-    //     }
+        if (date != null) time_entry.Date = (DateOnly)date;
+        if (time != null) time_entry.Time = (TimeSpan)time;
+        if (description != null) time_entry.Description = (string)description;
 
-    //     await _ctx.SaveChangesAsync();
-    // }
+        if (task_id != null) {
+	        var task = await _ctx.Tasks.FindAsync(task_id);
+	        if (task != null)
+	        {
+	            if (task.IsActive)
+	            {
+	                time_entry.Task = task;
+	                time_entry.TaskId = (int)task_id;
+	            } else if (task_id != time_entry.TaskId) throw new ArgumentException("Проводка по неактивной задаче");
+	        }
+        }
+
+        await _ctx.SaveChangesAsync();
+    }
 }

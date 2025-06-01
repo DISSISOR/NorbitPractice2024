@@ -540,6 +540,30 @@ entriesApi.MapGet("/{id:int}", async (int id, ApplicationContext ctx) =>
     .WithName("GetEntryById")
     .WithOpenApi();
 
+entriesApi.MapPut("/{id:int}", async (int id, ClaimsPrincipal userPrincipal,
+                                                  DateOnly? date, int? taskId,
+                                                  TimeSpan? time, string? desc,
+                                                  EnteriesService enteriesService, ApplicationContext ctx) => {
+	var uid = userPrincipal.GetUserId();
+	var entry = await enteriesService.GetByIdAsync(id);
+	if (entry == null) {
+		return Results.NotFound("Не найдена проводка");
+	}
+	if (uid != entry.UserId) {
+		return Results.Forbid();
+	}
+    try
+    {
+        await enteriesService.Update(id, uid, taskId, date, time, desc);
+        return Results.NoContent();
+    } catch (ArgumentException ex)
+    {
+        return Results.NotFound(ex.Message);
+    }
+})
+    .WithName("UpdateEntry")
+    .WithOpenApi();
+
 entriesApi.MapDelete("/{id:int}", async (int id, ApplicationContext ctx) =>
 {
     var entry = await ctx.TimeEntries.FindAsync(id);
