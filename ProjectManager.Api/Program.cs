@@ -383,6 +383,32 @@ tasksApi.MapGet("/by_day/entries", async (DateOnly date, TaskService taskService
     .WithName("GetTaskSummaryByDate")
     .WithOpenApi();
 
+tasksApi.MapGet("/period/entries/{days:int}", async (int days, ApplicationContext ctx) => {
+    var since = DateOnly.FromDateTime(DateTime.Now - new TimeSpan(days, 0, 0, 0));
+	var entries = ctx.TimeEntries.Include(e => e.Task).Include(e => e.User).Where(e => e.Date >= since);
+	var result = await entries.Select(e =>
+		new {
+			id = e.Task.Id,
+			name = e.Task.Name,
+			isActive = e.Task.IsActive,
+			user = new {
+				name = e.User.Name,
+				id = e.User.Id,
+				entryId = e.Id,
+				entryTime = e.Time,
+			}
+		}
+	).ToListAsync();
+	var entryList = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
+	var sum = entryList.Aggregate(TimeSpan.Zero, (sum, next) => sum + (TimeSpan)next.Time);
+	return Results.Ok(new {
+		results = result,
+		sum = sum
+	});
+})
+    .WithName("GetTaskSummaryByPeriod")
+    .WithOpenApi();
+
 tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? isActive, TaskService taskService, ProjectService projectService, UserService userService, ApplicationContext ctx) =>
 {
     var project = await projectService.GetByCodeAsync(projectCode);
