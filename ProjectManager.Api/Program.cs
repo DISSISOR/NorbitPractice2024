@@ -17,10 +17,21 @@ using Microsoft.AspNetCore.Http;
 using ProjectManager.Models;
 using ProjectManager.Infrastructure;
 
+
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") 
+    ?? "Production";
+
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.Development.json")
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables()
     .Build();
+
+// var configuration = new ConfigurationBuilder()
+//     .SetBasePath(Directory.GetCurrentDirectory())
+//     .AddJsonFile("appsettings.Development.json")
+//     .Build();
 
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 
@@ -139,21 +150,10 @@ var entriesApi = app.MapGroup("/entries").WithOpenApi()
 var rolesApi = app.MapGroup("/roles").WithOpenApi()
     .WithTags("Roles");
 
-// loginApi.MapPost("/register", (string username, string password) =>
-// {
-// })
-//     .WithName("Register")
-//     .WithOpenApi();
 
 loginApi.MapPost("/register", [Authorize(Roles="admin")] async (string name, string password, bool? isAdmin, bool? isManager, UserService userService) =>
 {
     var nextId = userService.GetNextId();
-    // var role = Role.User;
-    // var isUserAdmin = false;
-    // if (isAdmin ?? false)
-    // {
-    //     isUserAdmin ;
-    // }
     var user = User.WithPassword(nextId, name, password);
     var existingUser = await userService.GetByNameAsync(name);
     if (existingUser != null) {
@@ -413,9 +413,6 @@ tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? 
 {
     var project = await projectService.GetByCodeAsync(projectCode);
     if (project == null) return Results.NotFound("Проект не найден");
-    // var user = await userService.GetByIdAsync(userId);
-    // if (user == null) return Results.NotFound("Пользователь не найден");
-
 	var role = await ctx.Roles.FindAsync(roleId);
 	if (role == null) return Results.NotFound("Роль не найдена");
 
@@ -428,9 +425,7 @@ tasksApi.MapPost("/", async (string name, string projectCode, int roleId, bool? 
 		Role = role,
 		RoleId = role.Id,
     };
-    // var task = new ProjectManager.Models.Task(nextId, name, project, user, isActive ?? true);
     await taskService.AddAsync(task);
-    // await ctx.SaveChangesAsync();
     return Results.Created($"/tasks/{task.Id}", task);
 })
     .WithName("CreateTask")
@@ -443,20 +438,6 @@ tasksApi.MapGet("/{id:int}", async (int id, TaskService taskService) =>
             : Results.NotFound())
     .WithName("GetTaskById")
     .WithOpenApi();
-
-// tasksApi.MapGet("/by_user", async (int userId, TaskService taskService) =>
-// {
-    // try
-    // {
-        // var tasks = await taskService.GetAllByUserAsync(userId);
-        // return Results.Ok(tasks);
-    // } catch (ArgumentException ex)
-    // {
-        // return Results.NotFound(ex.Message);
-    // }
-// })
-    // .WithName("GetTasksByUserId")
-    // .WithOpenApi();
 
 tasksApi.MapDelete("/{id:int}", async (int id, TaskService taskService) =>
 {
@@ -516,7 +497,6 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx, En
             return Results.Ok(res);
         } else
         {
-            // var res = await ctx.TimeEntries.Where(e => e.Date >= since).ToListAsync();
             var res = await enteriesService.GetAllAsync();
             return Results.Ok(res);
         }
@@ -528,7 +508,6 @@ entriesApi.MapGet("/", async (int? days, int? userId, ApplicationContext ctx, En
             return Results.Ok(res);
         } else
         {
-            //var res = await ctx.TimeEntries.ToListAsync();
             var res = await enteriesService.GetAllAsync();
             return Results.Ok(res);
         }

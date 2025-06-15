@@ -25,17 +25,6 @@ public class TaskService
         return await _ctx.Set<Task>().Include(t => t.Project).ToListAsync();
     }
 
-    // public async Task<List<Task>> GetAllByUserAsync(int userId)
-    // {
-	//  #  var user = _ctx.Set<User>().FindAsync(userId).Result;
-    //     if (user == null)
-    //     {
-    //         throw new ArgumentException("Не найден пользователь");
-    //     }
-    //     // return await _ctx.Set<Task>().Where(t => t.UserId == userId).ToListAsync();
-    //     return await user..ToListAsync();
-    // }
-
     public async System.Threading.Tasks.Task AddAsync(Task task)
     {
         _ctx.Set<Task>().Add(task);
@@ -73,7 +62,6 @@ public class TaskService
         if (task == null) throw new ArgumentException("Не найдена задача");
 
         if (name != null) task.Name = (string)name;
-        // if (isActive != null) 
         if (isActive is bool someActive) {
 	        task.IsActive = someActive;
         }

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+for dir in "ProjectManager.Api" "ProjectManager.Infrastructure" "ProjectManager.Models"; do
+    for file in $(ls $dir/*.cs); do
+        echo // $file
+        cat $file
+    done
+done
