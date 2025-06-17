@@ -525,10 +525,16 @@ entriesApi.MapPost("/", [Authorize] async (DateOnly? date, ClaimsPrincipal userC
         return Results.Unauthorized();
     }
 
-    var task = await ctx.Tasks.FindAsync(taskId);
+    var task = await ctx.Tasks.Include(t => t.Role).FirstOrDefaultAsync(t => taskId == t.Id);
     if (task == null) return Results.NotFound("Task not found");
-    var user = await ctx.Users.FindAsync(userId);
+    var user = await ctx.Users.Include(u => u.Roles).Select(u => new {
+	    Id = u.Id,
+	    Roles = u.Roles.Select(r => r.Id).ToList()
+    }).FirstOrDefaultAsync(u => u.Id == userId);
     if (user == null) return Results.NotFound("User not found");
+    if (task.Role == null || !user.Roles.Any(r => r == task.Role.Id)) {
+        return Results.BadRequest("Несовпадение ролей");
+    }
 
     var _date = date ?? DateOnly.FromDateTime(DateTime.Now);
     var entries = await EntriesByUser(ctx, userId);
@@ -551,7 +557,7 @@ entriesApi.MapPost("/", [Authorize] async (DateOnly? date, ClaimsPrincipal userC
         Time = time,
         Description = description,
         Task = task,
-        User = user,
+        User = await ctx.Users.FindAsync(user.Id),
         UserId = user.Id,
     };
     ctx.TimeEntries.Add(entry);
